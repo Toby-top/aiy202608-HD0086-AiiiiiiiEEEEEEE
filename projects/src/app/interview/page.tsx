@@ -17,6 +17,8 @@ import {
   ChevronRight,
   Bot,
   MessageSquare,
+  Menu,
+  X,
 } from 'lucide-react';
 
 const TYPE_ICONS = {
@@ -30,6 +32,7 @@ export default function InterviewPage() {
   const [showSelection, setShowSelection] = useState(false);
   const [selectedType, setSelectedType] = useState<InterviewType | null>(null);
   const [showDeviceTest, setShowDeviceTest] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleSelectType = (type: InterviewType) => {
     setSelectedType(type);
@@ -52,10 +55,20 @@ export default function InterviewPage() {
     setShowSelection(true);
     setShowDeviceTest(false);
     setSelectedType(null);
+    setSidebarOpen(false);
   };
 
   return (
     <div className="flex h-screen bg-stone-50">
+      <button
+        onClick={() => setSidebarOpen((value) => !value)}
+        className="fixed left-3 top-3 z-50 inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-700 shadow-lg transition-all hover:bg-stone-50 lg:hidden"
+        aria-label={sidebarOpen ? '关闭侧边栏' : '打开侧边栏'}
+      >
+        {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+        <span>菜单</span>
+      </button>
+
       {/* Sidebar */}
       <div className="hidden lg:flex">
         <Sidebar
@@ -65,6 +78,24 @@ export default function InterviewPage() {
           onNewChat={handleNewChat}
         />
       </div>
+
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="关闭侧边栏遮罩"
+          />
+          <div className="absolute inset-y-0 left-0">
+            <Sidebar
+              interviewType=""
+              messageCount={0}
+              duration={0}
+              onNewChat={handleNewChat}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -81,7 +112,7 @@ export default function InterviewPage() {
         {!showDeviceTest && (
           <>
             <header className="border-b border-stone-200/60 bg-white/80 backdrop-blur-sm">
-              <div className="flex items-center gap-3 px-4 py-3 sm:px-6">
+              <div className="flex items-center gap-3 px-4 py-3 pl-28 sm:px-6 sm:pl-32 lg:pl-6">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-sm">
                   <Bot className="h-4.5 w-4.5" />
                 </div>

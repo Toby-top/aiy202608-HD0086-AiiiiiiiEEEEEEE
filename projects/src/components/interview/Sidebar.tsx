@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ChevronRight,
   LogOut,
-  Settings,
   User,
   Clock,
   Award,
@@ -189,12 +188,10 @@ export function Sidebar({ interviewType, messageCount, duration, onNewChat }: Si
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <button className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600">
-              <Settings className="h-4 w-4" />
-            </button>
             <button
               onClick={() => router.push('/')}
               className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-600"
+              aria-label="退出到登录页"
             >
               <LogOut className="h-4 w-4" />
             </button>

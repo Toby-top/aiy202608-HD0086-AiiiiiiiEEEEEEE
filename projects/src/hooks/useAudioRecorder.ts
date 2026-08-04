@@ -3,6 +3,8 @@
 import { useState, useRef, useCallback } from 'react';
 import type { RecordingStatus } from '@/types/interview';
 
+const MIC_GAIN = 3.2;
+
 interface UseAudioRecorderReturn {
   /** 当前录音状态 */
   status: RecordingStatus;
@@ -73,6 +75,8 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
+          autoGainControl: true,
+          channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
           sampleRate: 44100,
@@ -80,13 +84,26 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       });
       streamRef.current = stream;
 
-      // 设置音频分析器
+      // 设置音频增益和分析器，让偏小的内置麦克风也能被清楚录下。
       const audioContext = new AudioContext();
       audioContextRef.current = audioContext;
       const source = audioContext.createMediaStreamSource(stream);
+      const gain = audioContext.createGain();
+      const compressor = audioContext.createDynamicsCompressor();
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = 2048;
-      source.connect(analyser);
+      gain.gain.value = MIC_GAIN;
+      compressor.threshold.value = -18;
+      compressor.knee.value = 24;
+      compressor.ratio.value = 10;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.25;
+
+      const destination = audioContext.createMediaStreamDestination();
+      source.connect(gain);
+      gain.connect(compressor);
+      compressor.connect(analyser);
+      compressor.connect(destination);
       analyserRef.current = analyser;
 
       if (!window.MediaRecorder) {
@@ -105,7 +122,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
       // 设置 MediaRecorder
       const mediaRecorder = new MediaRecorder(
-        stream,
+        destination.stream,
         supportedMimeType ? { mimeType: supportedMimeType } : undefined
       );
       mediaRecorderRef.current = mediaRecorder;

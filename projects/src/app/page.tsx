@@ -3,8 +3,9 @@
  */
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { LoginForm } from '@/components/auth/LoginForm';
-import { GraduationCap, Users, Mic } from 'lucide-react';
+import { GraduationCap, Users, Mic, BadgeDollarSign } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -21,6 +22,13 @@ export default function HomePage() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-teal-900/70 via-teal-900/50 to-teal-900/80" />
         <div className="relative z-10 flex flex-col items-center justify-center h-full text-center px-6">
+          <Link
+            href="/pricing"
+            className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/25"
+          >
+            <BadgeDollarSign className="h-3.5 w-3.5" />
+            套餐
+          </Link>
           <div className="flex items-center gap-2 mb-4">
             <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
               <GraduationCap className="w-5 h-5 text-white" />
@@ -47,11 +55,20 @@ export default function HomePage() {
           <div className="absolute inset-0 bg-gradient-to-r from-teal-900/80 via-teal-900/50 to-transparent" />
 
           <div className="relative z-10 flex flex-col justify-center px-12 xl:px-16 max-w-2xl">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                <GraduationCap className="w-6 h-6 text-white" />
+            <div className="mb-8 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                  <GraduationCap className="w-6 h-6 text-white" />
+                </div>
+                <span className="text-xl font-bold text-white">AI 面试辅导</span>
               </div>
-              <span className="text-xl font-bold text-white">AI 面试辅导</span>
+              <Link
+                href="/pricing"
+                className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/25"
+              >
+                <BadgeDollarSign className="h-4 w-4" />
+                查看套餐
+              </Link>
             </div>
 
             <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight tracking-tight mb-6">

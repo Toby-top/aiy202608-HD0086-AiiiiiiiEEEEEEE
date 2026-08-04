@@ -55,11 +55,11 @@ export function generateId(): string {
 export function getOpeningMessage(type: InterviewType): string {
   const openings: Record<InterviewType, string> = {
     'common-app':
-      '你好！欢迎来到 Common App 模拟面试。我是你的 AI 面试官。在接下来的时间里，我会问你一些关于你自己的问题。没有标准答案，放松就好。我们先从简单的开始——请用一两分钟介绍一下你自己吧。',
+      "Hello! Welcome to your Common App mock interview. I'm your AI interviewer today. There are no right or wrong answers here, so please relax and be yourself. Let's start with something simple: could you introduce yourself in one or two minutes?",
     alumni:
-      '嗨！很高兴今天能和你聊聊。我是你的校友面试官，今天的对话会比较轻松随意。我想了解的是一个真实的你——你的兴趣、你的想法、你对未来的期待。那我们先从破冰开始：最近有什么让你特别兴奋的事情吗？',
+      "Hi! It's great to meet you. I'll be your alumni interviewer today, and this conversation can feel relaxed and informal. I'd love to get to know the real you: your interests, your ideas, and what you're excited about. To start, what is something you've been genuinely excited about recently?",
     initialview:
-      '你好！欢迎参加 Initialview 模拟面试。本次面试大约持续 15-20 分钟，包含几个随机问题。请尽量用英语回答，保持自然和真实。准备好了吗？让我们开始第一个问题：What is a topic you could talk about for 30 minutes with no preparation?',
+      'Hello! Welcome to your Initialview mock interview. This interview will take about 15 to 20 minutes and include several short questions. Please answer in English and keep your responses natural and authentic. Ready? Here is the first question: what is a topic you could talk about for 30 minutes with no preparation?',
   };
   return openings[type];
 }

@@ -103,7 +103,7 @@ export default function ReportPage() {
       <header className="border-b border-stone-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 py-4">
           <button
-            onClick={() => router.push('/')}
+            onClick={() => router.push('/interview')}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700"
             aria-label="返回首页"
           >
@@ -234,7 +234,7 @@ export default function ReportPage() {
             {/* 操作按钮 */}
             <div className="flex gap-3">
               <button
-                onClick={() => router.push('/')}
+                onClick={() => router.push('/interview')}
                 className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50"
               >
                 返回首页
@@ -334,7 +334,7 @@ export default function ReportPage() {
             {/* 操作按钮 */}
             <div className="mt-6 flex gap-3">
               <button
-                onClick={() => router.push('/')}
+                onClick={() => router.push('/interview')}
                 className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50"
               >
                 返回首页

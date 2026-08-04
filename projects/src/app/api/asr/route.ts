@@ -40,6 +40,24 @@ export async function POST(request: NextRequest) {
 
     const base64Data = Buffer.from(arrayBuffer).toString('base64');
 
+    if (!config.baseUrl) {
+      return NextResponse.json({
+        success: false,
+        text: '',
+        duration: 0,
+        data: {
+          text: '',
+          duration: 0,
+        },
+        error: 'ASR service is not configured',
+        message: 'ASR service is not configured; browser speech recognition fallback may be used',
+        debug: {
+          type: audioFile.type,
+          size: audioFile.size,
+        },
+      });
+    }
+
     const result = await client.recognize({
       uid: `user_${Date.now()}`,
       base64Data,

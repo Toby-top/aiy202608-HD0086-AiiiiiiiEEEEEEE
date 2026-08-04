@@ -104,7 +104,18 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
       cancelAnimationFrame(animationFrameRef.current);
 
       const constraints: MediaStreamConstraints = {
-        audio: selectedMic ? { deviceId: { exact: selectedMic } } : true,
+        audio: selectedMic
+          ? {
+              autoGainControl: true,
+              deviceId: { exact: selectedMic },
+              echoCancellation: true,
+              noiseSuppression: true,
+            }
+          : {
+              autoGainControl: true,
+              echoCancellation: true,
+              noiseSuppression: true,
+            },
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -124,10 +135,14 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
       // 开始检测音量
       const updateVolume = () => {
         if (analyserRef.current) {
-          const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-          analyserRef.current.getByteFrequencyData(dataArray);
-          const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-          setMicVolume(average / 255);
+          const dataArray = new Uint8Array(analyserRef.current.fftSize);
+          analyserRef.current.getByteTimeDomainData(dataArray);
+          const sumSquares = dataArray.reduce((sum, value) => {
+            const centered = (value - 128) / 128;
+            return sum + centered * centered;
+          }, 0);
+          const rms = Math.sqrt(sumSquares / dataArray.length);
+          setMicVolume(Math.min(1, rms * 5));
         }
         animationFrameRef.current = requestAnimationFrame(updateVolume);
       };
