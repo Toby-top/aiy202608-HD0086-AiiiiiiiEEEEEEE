@@ -49,7 +49,9 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       streamRef.current = null;
     }
     if (audioContextRef.current) {
-      audioContextRef.current.close();
+      if (audioContextRef.current.state !== 'closed') {
+        void audioContextRef.current.close().catch(() => undefined);
+      }
       audioContextRef.current = null;
     }
     analyserRef.current = null;
@@ -87,8 +89,20 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       source.connect(analyser);
       analyserRef.current = analyser;
 
+      if (!window.MediaRecorder) {
+        throw new Error('当前浏览器不支持录音');
+      }
+
+      const mimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+      const supportedMimeType = mimeTypes.find((type) =>
+        MediaRecorder.isTypeSupported(type)
+      );
+
       // 设置 MediaRecorder
-      const mediaRecorder = new MediaRecorder(stream);
+      const mediaRecorder = new MediaRecorder(
+        stream,
+        supportedMimeType ? { mimeType: supportedMimeType } : undefined
+      );
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event: BlobEvent) => {
@@ -127,7 +141,9 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       setStatus('processing');
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const blob = new Blob(chunksRef.current, {
+          type: mediaRecorder.mimeType || 'audio/webm',
+        });
         cleanup();
         setStatus('idle');
         setAnalyserData(null);

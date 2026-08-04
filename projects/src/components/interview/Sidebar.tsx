@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   MessageSquarePlus,
@@ -15,6 +15,7 @@ import {
   Clock,
   Award,
 } from 'lucide-react';
+import type { InterviewType } from '@/types/interview';
 
 interface SidebarProps {
   interviewType: string;
@@ -23,15 +24,33 @@ interface SidebarProps {
   onNewChat: () => void;
 }
 
+interface InterviewHistoryItem {
+  id: string;
+  interviewType: InterviewType;
+  title: string;
+  duration: number;
+  createdAt: number;
+}
+
 export function Sidebar({ interviewType, messageCount, duration, onNewChat }: SidebarProps) {
   const router = useRouter();
   const [expandedFolder, setExpandedFolder] = useState(true);
+  const [history, setHistory] = useState<InterviewHistoryItem[]>([]);
 
   const formatDuration = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}分${s}秒`;
   };
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('interview-history');
+      setHistory(raw ? JSON.parse(raw) : []);
+    } catch {
+      setHistory([]);
+    }
+  }, []);
 
   return (
     <aside className="flex h-full w-72 flex-col border-r border-stone-200/60 bg-stone-50/80">
@@ -58,13 +77,19 @@ export function Sidebar({ interviewType, messageCount, duration, onNewChat }: Si
         </button>
 
         {/* 知识库 */}
-        <button className="mb-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-stone-600 transition-colors hover:bg-stone-100">
+        <button
+          onClick={() => router.push('/knowledge')}
+          className="mb-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-stone-600 transition-colors hover:bg-stone-100"
+        >
           <BookOpen className="h-4 w-4 text-stone-400" />
           知识库
         </button>
 
         {/* 题库广场 */}
-        <button className="mb-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-stone-600 transition-colors hover:bg-stone-100">
+        <button
+          onClick={() => router.push('/question-bank')}
+          className="mb-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-stone-600 transition-colors hover:bg-stone-100"
+        >
           <Grid3X3 className="h-4 w-4 text-stone-400" />
           题库广场
         </button>
@@ -107,6 +132,32 @@ export function Sidebar({ interviewType, messageCount, duration, onNewChat }: Si
             </div>
           )}
         </div>
+
+        {history.length > 0 && (
+          <div className="mt-4">
+            <p className="mb-2 px-3 text-[11px] font-medium uppercase tracking-wider text-stone-400">
+              历史报告
+            </p>
+            <div className="space-y-0.5">
+              {history.slice(0, 6).map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() =>
+                    router.push(
+                      `/report/${item.id}?type=${item.interviewType}&duration=${item.duration}`
+                    )
+                  }
+                  className="flex w-full flex-col rounded-lg px-3 py-2 text-left transition-colors hover:bg-stone-100"
+                >
+                  <span className="truncate text-sm text-stone-700">{item.title}</span>
+                  <span className="text-[11px] text-stone-400">
+                    {formatDuration(item.duration)} · {new Date(item.createdAt).toLocaleDateString()}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Current Session Stats */}

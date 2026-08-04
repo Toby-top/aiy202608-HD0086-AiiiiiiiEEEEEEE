@@ -32,15 +32,25 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
+      success: true,
       audioUri: response.audioUri,
       audioSize: response.audioSize,
+      data: {
+        audioUri: response.audioUri,
+        audioSize: response.audioSize,
+      },
     });
   } catch (error) {
     console.error('TTS error:', error);
     // Return a graceful fallback - TTS is optional, frontend can work without it
     return NextResponse.json({
+      success: false,
       audioUri: null,
       audioSize: 0,
+      data: {
+        audioUri: null,
+        audioSize: 0,
+      },
       message: 'TTS service temporarily unavailable',
     });
   }

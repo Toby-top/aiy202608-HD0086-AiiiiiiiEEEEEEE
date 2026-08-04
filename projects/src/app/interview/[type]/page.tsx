@@ -28,6 +28,25 @@ import {
   MessageSquare,
 } from 'lucide-react';
 
+interface InterviewHistoryItem {
+  id: string;
+  interviewType: InterviewType;
+  title: string;
+  duration: number;
+  createdAt: number;
+}
+
+function saveInterviewHistory(item: InterviewHistoryItem) {
+  try {
+    const raw = localStorage.getItem('interview-history');
+    const history = raw ? (JSON.parse(raw) as InterviewHistoryItem[]) : [];
+    const next = [item, ...history.filter((saved) => saved.id !== item.id)].slice(0, 20);
+    localStorage.setItem('interview-history', JSON.stringify(next));
+  } catch {
+    // localStorage can fail in private browsing or when quota is exceeded.
+  }
+}
+
 export default function InterviewPage() {
   const params = useParams();
   const router = useRouter();
@@ -41,6 +60,8 @@ export default function InterviewPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [isAITalking, setIsAITalking] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const lastAutoPlayedIdRef = useRef<string | null>(null);
 
   const segmentsRef = useRef<InterviewSegment[]>([]);
   const questionCountRef = useRef(0);
@@ -49,21 +70,43 @@ export default function InterviewPage() {
   const recorder = useAudioRecorder();
   const videoRecorder = useVideoRecorder();
 
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  const synthesizeSpeech = useCallback(async (text: string) => {
+    try {
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await response.json();
+      return data.data?.audioUri || data.audioUri || undefined;
+    } catch {
+      return undefined;
+    }
+  }, []);
+
   // 设备测试完成后开始面试
   const handleStartInterview = useCallback(
-    (type: InterviewType) => {
+    async (type: InterviewType) => {
       // 防止重复调用
       if (status !== 'idle') return;
 
       const config = getInterviewConfig(type);
       if (!config) return;
 
+      const openingText = getOpeningMessage(type);
+      const audioUrl = await synthesizeSpeech(openingText);
+      questionCountRef.current = 1;
       const openingMessage: ChatMessage = {
         id: generateId(),
         role: 'interviewer',
-        content: getOpeningMessage(type),
+        content: openingText,
         timestamp: Date.now(),
-        duration: 5,
+        audioUrl,
+        duration: Math.max(5, openingText.length * 0.06),
       };
 
       setMessages([openingMessage]);
@@ -71,7 +114,7 @@ export default function InterviewPage() {
       timer.start();
 
       // 启动视频录制
-      videoRecorder.startRecording();
+      void videoRecorder.startRecording();
 
       segmentsRef.current = [
         {
@@ -85,17 +128,14 @@ export default function InterviewPage() {
         },
       ];
     },
-    [timer, status, videoRecorder]
+    [synthesizeSpeech, timer, status, videoRecorder]
   );
 
   // 如果 URL 中有 type，自动选中
   useEffect(() => {
     if (urlType && getInterviewConfig(urlType)) {
       setSelectedType(urlType);
-      // 如果已经通过设备测试，直接开始面试
-      if (isReady) {
-        handleStartInterview(urlType);
-      }
+      handleStartInterview(urlType);
     }
   }, [urlType, isReady, handleStartInterview]);
 
@@ -104,8 +144,10 @@ export default function InterviewPage() {
   const handleNewChat = useCallback(() => {
     setSelectedType(null);
     setMessages([]);
+    segmentsRef.current = [];
+    questionCountRef.current = 0;
     setStatus('idle');
-    timer.stop();
+    timer.reset();
     router.replace('/interview');
   }, [router, timer]);
 
@@ -136,8 +178,9 @@ export default function InterviewPage() {
     setMessages((prev) => [...prev, studentMessage]);
 
     const studentEndTime = timer.seconds;
+    const answerSegmentId = `seg-answer-${Date.now()}`;
     segmentsRef.current.push({
-      id: `seg-answer-${Date.now()}`,
+      id: answerSegmentId,
       type: 'answer',
       role: 'student',
       content: '[语音消息]',
@@ -161,8 +204,9 @@ export default function InterviewPage() {
 
       const asrData = (await asrResponse.json()) as import('@/types/interview').ASRResponse;
 
-      if (asrData.success && asrData.data?.text) {
-        recognizedText = asrData.data.text;
+      const text = asrData.data?.text || asrData.text;
+      if (asrData.success && text?.trim()) {
+        recognizedText = text.trim();
       } else {
         recognizedText = '(未检测到有效语音)';
       }
@@ -175,16 +219,28 @@ export default function InterviewPage() {
         msg.id === studentMsgId ? { ...msg, content: recognizedText } : msg
       )
     );
+    segmentsRef.current = segmentsRef.current.map((segment) =>
+      segment.id === answerSegmentId
+        ? { ...segment, content: recognizedText || '(未检测到有效语音)' }
+        : segment
+    );
 
-    // 将识别文字发送给 AI 面试官
+    // 将识别文字发送给 AI 面试官。ASR 失败时保留用户气泡，但不把占位文本交给模型胡编。
+    const messageForAI = recognizedText.startsWith('(')
+      ? 'The student audio could not be transcribed clearly. Please ask them to repeat the answer in a friendly, concise way.'
+      : recognizedText;
+
     try {
       const response = await fetch('/api/interview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           interviewType: selectedType,
-          message: recognizedText,
-          history: messages,
+          message: messageForAI,
+          history: [
+            ...messagesRef.current,
+            { ...studentMessage, content: recognizedText },
+          ],
         }),
       });
 
@@ -194,12 +250,14 @@ export default function InterviewPage() {
         // 解析 UI_CMD 数据
         const uiCmd = data.data.uiCmd;
         const replyText = uiCmd ? uiCmd.chat_bubble : data.data.reply;
+        const audioUrl = await synthesizeSpeech(replyText);
 
         const aiMessage: ChatMessage = {
           id: data.data.messageId,
           role: 'interviewer',
           content: replyText,
           timestamp: Date.now(),
+          audioUrl,
           duration: Math.max(3, replyText.length * 0.06),
           subtitle: uiCmd?.subtitle_text,
           stage: uiCmd?.current_stage,
@@ -238,6 +296,7 @@ export default function InterviewPage() {
         role: 'interviewer',
         content: randomReply,
         timestamp: Date.now(),
+        audioUrl: await synthesizeSpeech(randomReply),
         duration: Math.max(3, randomReply.length * 0.06),
       };
       setMessages((prev) => [...prev, aiMessage]);
@@ -258,7 +317,7 @@ export default function InterviewPage() {
     } finally {
       setIsTyping(false);
     }
-  }, [recorder, selectedType, messages, timer]);
+  }, [recorder, selectedType, synthesizeSpeech, timer]);
 
   // 结束面试
   const handleFinish = useCallback(async () => {
@@ -296,7 +355,7 @@ export default function InterviewPage() {
     try {
       // 将视频 Blob 转换为 base64 以便存储
       let videoDataUrl = '';
-      if (videoBlob) {
+      if (videoBlob && videoBlob.size <= 3_500_000) {
         videoDataUrl = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
@@ -308,12 +367,27 @@ export default function InterviewPage() {
         id: resultId,
         interviewType: selectedType,
         audioUrl: '/mock-interview.webm',
-        videoDataUrl,
+        videoUrl: videoDataUrl,
+        messages: messagesRef.current,
         totalDuration: timer.seconds,
         segments,
         createdAt: Date.now(),
       };
-      localStorage.setItem(`interview-${resultId}`, JSON.stringify(playbackData));
+      try {
+        localStorage.setItem(`interview-${resultId}`, JSON.stringify(playbackData));
+      } catch {
+        localStorage.setItem(
+          `interview-${resultId}`,
+          JSON.stringify({ ...playbackData, videoUrl: '' })
+        );
+      }
+      saveInterviewHistory({
+        id: resultId,
+        interviewType: selectedType,
+        title: getInterviewConfig(selectedType)?.title || '模拟面试',
+        duration: timer.seconds,
+        createdAt: playbackData.createdAt,
+      });
     } catch {
       // localStorage 不可用时静默失败
     }
@@ -324,6 +398,23 @@ export default function InterviewPage() {
   }, [router, selectedType, timer, videoRecorder]);
 
   const config = selectedType ? getInterviewConfig(selectedType) : null;
+  const latestMessageId = messages[messages.length - 1]?.id;
+
+  useEffect(() => {
+    const latest = messages[messages.length - 1];
+    if (!latest || latest.role !== 'interviewer' || latest.id === lastAutoPlayedIdRef.current) {
+      return;
+    }
+
+    lastAutoPlayedIdRef.current = latest.id;
+    setIsAITalking(true);
+    const timeout = window.setTimeout(
+      () => setIsAITalking(false),
+      Math.max(3, latest.duration || 3) * 1000 + 500
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [messages]);
 
   return (
     <div className="flex h-screen bg-gradient-to-b from-stone-50 to-white">
@@ -507,13 +598,14 @@ export default function InterviewPage() {
                             <p className={`mb-1.5 text-xs font-medium ${
                               selectedType === 'initialview' ? 'text-stone-700' : 'text-stone-500'
                             }`}>面试官</p>
-                            <VoiceMessage
-                              audioUrl={message.audioUrl}
-                              duration={message.duration || 3}
-                              role="interviewer"
-                              textContent={message.content}
-                              variant={selectedType === 'initialview' ? 'glass' : 'default'}
-                            />
+                          <VoiceMessage
+                            audioUrl={message.audioUrl}
+                            duration={message.duration || 3}
+                            role="interviewer"
+                            textContent={message.content}
+                            variant={selectedType === 'initialview' ? 'glass' : 'default'}
+                            autoPlay={latestMessageId === message.id}
+                          />
                           </div>
                         </div>
                       );

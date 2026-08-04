@@ -17,6 +17,8 @@ interface VoiceMessageProps {
   waveform?: number[];
   /** 样式变体：default 或 glass（Initialview 玻璃质感） */
   variant?: 'default' | 'glass';
+  /** 是否在挂载后自动播放 */
+  autoPlay?: boolean;
 }
 
 /** 生成静态波形条 */
@@ -30,9 +32,17 @@ function generateWaveformBars(count: number, seed: number): number[] {
   return bars;
 }
 
-export function VoiceMessage({ audioUrl, duration, role, textContent, waveform, variant = 'default' }: VoiceMessageProps) {
+export function VoiceMessage({
+  audioUrl,
+  duration,
+  role,
+  textContent,
+  waveform,
+  variant = 'default',
+  autoPlay = false,
+}: VoiceMessageProps) {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [showTranscript, setShowTranscript] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(role === 'student');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [progress, setProgress] = useState(0);
 
@@ -50,31 +60,6 @@ export function VoiceMessage({ audioUrl, duration, role, textContent, waveform, 
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
-
-  // 播放学生录音
-  const playAudio = useCallback(() => {
-    if (!audioUrl) return;
-
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play();
-      setIsPlaying(true);
-      startTimeRef.current = Date.now();
-
-      const updateProgress = () => {
-        if (!audioRef.current) return;
-        const elapsed = audioRef.current.currentTime;
-        setProgress(elapsed / duration);
-        if (elapsed < duration) {
-          animFrameRef.current = requestAnimationFrame(updateProgress);
-        } else {
-          setIsPlaying(false);
-          setProgress(0);
-        }
-      };
-      animFrameRef.current = requestAnimationFrame(updateProgress);
-    }
-  }, [audioUrl, duration]);
 
   // 播放面试官语音（使用 SpeechSynthesis）
   const playSpeech = useCallback(() => {
@@ -96,7 +81,7 @@ export function VoiceMessage({ audioUrl, duration, role, textContent, waveform, 
     const updateProgress = () => {
       const elapsed = (Date.now() - startTimeRef.current) / 1000;
       setProgress(Math.min(elapsed / totalDuration, 1));
-      if (elapsed < totalDuration && isPlaying) {
+      if (elapsed < totalDuration) {
         animFrameRef.current = requestAnimationFrame(updateProgress);
       }
     };
@@ -116,7 +101,40 @@ export function VoiceMessage({ audioUrl, duration, role, textContent, waveform, 
     };
 
     window.speechSynthesis.speak(utterance);
-  }, [textContent, duration, isPlaying]);
+  }, [textContent, duration]);
+
+  // 播放学生录音或已合成的面试官音频
+  const playAudio = useCallback(() => {
+    if (!audioUrl) return;
+
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      setIsPlaying(true);
+      startTimeRef.current = Date.now();
+
+      const updateProgress = () => {
+        if (!audioRef.current) return;
+        const elapsed = audioRef.current.currentTime;
+        const safeDuration = duration || audioRef.current.duration || 1;
+        setProgress(elapsed / safeDuration);
+        if (elapsed < safeDuration) {
+          animFrameRef.current = requestAnimationFrame(updateProgress);
+        } else {
+          setIsPlaying(false);
+          setProgress(0);
+        }
+      };
+      animFrameRef.current = requestAnimationFrame(updateProgress);
+
+      void audioRef.current.play().catch(() => {
+        setIsPlaying(false);
+        setProgress(0);
+        if (isInterviewer) {
+          playSpeech();
+        }
+      });
+    }
+  }, [audioUrl, duration, isInterviewer, playSpeech]);
 
   // 切换播放/暂停
   const togglePlay = useCallback(() => {
@@ -136,13 +154,34 @@ export function VoiceMessage({ audioUrl, duration, role, textContent, waveform, 
       setProgress(0);
     } else {
       // 开始播放
-      if (isInterviewer) {
+      if (audioUrl) {
+        playAudio();
+      } else if (isInterviewer) {
         playSpeech();
       } else {
         playAudio();
       }
     }
-  }, [isPlaying, isInterviewer, playAudio, playSpeech]);
+  }, [audioUrl, isPlaying, isInterviewer, playAudio, playSpeech]);
+
+  useEffect(() => {
+    if (role === 'student' && textContent) {
+      setShowTranscript(true);
+    }
+  }, [role, textContent]);
+
+  useEffect(() => {
+    if (!autoPlay) return;
+    const timer = window.setTimeout(() => {
+      if (audioUrl) {
+        playAudio();
+      } else if (isInterviewer) {
+        playSpeech();
+      }
+    }, 100);
+
+    return () => window.clearTimeout(timer);
+  }, [audioUrl, autoPlay, isInterviewer, playAudio, playSpeech]);
 
   // 右键菜单处理（所有语音条都支持转文字）
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -293,7 +332,7 @@ export function VoiceMessage({ audioUrl, duration, role, textContent, waveform, 
         )}
 
         {/* 右键菜单 */}
-        {contextMenu && isInterviewer && (
+        {contextMenu && (
           <div
             className="fixed z-50 min-w-[120px] rounded-lg border border-stone-200 bg-white py-1 shadow-lg animate-[slide-up_0.15s_ease-out]"
             style={{ left: contextMenu.x, top: contextMenu.y }}

@@ -126,13 +126,35 @@ async function handleJsonInterview(
   let replyText = getFallbackResponse(history.length + 1);
 
   try {
-    const response = await client.invoke(allMessages, {
-      model: 'doubao-seed-1-8-251228',
-      temperature: 0.8,
-    });
-    replyText = response.content?.toString() || replyText;
+    if (process.env.DEEPSEEK_API_KEY) {
+      const deepseekResponse = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+          temperature: 0.7,
+          messages: allMessages,
+        }),
+      });
+
+      if (!deepseekResponse.ok) {
+        throw new Error(`DeepSeek request failed: ${deepseekResponse.status}`);
+      }
+
+      const data = await deepseekResponse.json();
+      replyText = data.choices?.[0]?.message?.content?.trim() || replyText;
+    } else {
+      const response = await client.invoke(allMessages, {
+        model: 'doubao-seed-1-8-251228',
+        temperature: 0.8,
+      });
+      replyText = response.content?.toString() || replyText;
+    }
   } catch (error) {
-    console.error('JSON interview error:', error);
+    console.error('Interview model error:', error);
   }
 
   const uiCmd = buildUICmd(replyText, history.length, userMessage);

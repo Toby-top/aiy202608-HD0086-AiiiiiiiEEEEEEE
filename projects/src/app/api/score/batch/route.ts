@@ -36,6 +36,10 @@ D档（1-4分）：${dim.levels.D.desc}
 - C级（6.0-7.4）：一般，需改进，候补/拒绝
 - D级（1.0-5.9）：较差，不推荐，拒绝
 
+## 评分规则
+1. 只根据学生有效回答评分，不得因为面试官问题多、对话时长长或占位文本而提高分数
+2. 如果学生没有实质性回答、回答为空、只有“未检测到有效语音/语音识别失败”等占位内容，所有维度必须评为1分，综合等级为D
+
 ## 输出格式
 你必须严格按照以下JSON格式输出：
 
@@ -53,36 +57,138 @@ D档（1-4分）：${dim.levels.D.desc}
   "summary": "整体评价..."
 }`;
 
+type ScoreKey = 'logic' | 'depth' | 'resilience' | 'communication' | 'self-awareness' | 'motivation';
+type ScoreMap = Record<ScoreKey, { score: number; comment: string }>;
+type ScoreResult = {
+  scores?: Partial<Record<ScoreKey, { score?: number; comment?: string }>>;
+  totalScore?: number;
+  grade?: string;
+  summary?: string;
+};
+
+const SCORE_WEIGHTS: Record<ScoreKey, number> = {
+  logic: 0.25,
+  depth: 0.20,
+  resilience: 0.15,
+  communication: 0.15,
+  'self-awareness': 0.15,
+  motivation: 0.10,
+};
+
+const EMPTY_ANSWER_PATTERNS = [
+  /未检测到有效语音/,
+  /语音识别暂不可用/,
+  /could not be transcribed/i,
+  /^\[?语音消息\]?$/,
+  /^面试已结束$/,
+];
+
+function round1(value: number) {
+  return Math.round(value * 10) / 10;
+}
+
+function clampScore(value: number) {
+  return round1(Math.min(10, Math.max(1, value)));
+}
+
+function getStudentAnswerStats(messages: { role: string; content: string }[]) {
+  const userMessages = messages.filter((m) => m.role === 'user' || m.role === 'student');
+  const substantiveAnswers = userMessages
+    .map((m) => m.content.trim())
+    .filter((content) => content && !EMPTY_ANSWER_PATTERNS.some((pattern) => pattern.test(content)));
+
+  const signalLength = substantiveAnswers.reduce((sum, content) => {
+    const latinWords = content.match(/[A-Za-z0-9']+/g)?.length ?? 0;
+    const cjkChars = content.match(/[\u4e00-\u9fff]/g)?.length ?? 0;
+    return sum + latinWords + cjkChars;
+  }, 0);
+
+  return {
+    substantiveCount: substantiveAnswers.length,
+    signalLength,
+    avgSignalLength: signalLength / Math.max(substantiveAnswers.length, 1),
+  };
+}
+
+function calculateTotalScore(scores: ScoreMap) {
+  return round1(
+    Object.entries(SCORE_WEIGHTS).reduce(
+      (sum, [key, weight]) => sum + scores[key as ScoreKey].score * weight,
+      0
+    )
+  );
+}
+
+function buildNoAnswerScore() {
+  const scores: ScoreMap = {
+    logic: { score: 1, comment: '未检测到有效回答，无法评估逻辑结构。' },
+    depth: { score: 1, comment: '未检测到有效回答，缺少内容深度依据。' },
+    resilience: { score: 1, comment: '未检测到有效回答，无法体现追问应对能力。' },
+    communication: { score: 1, comment: '未检测到有效语音或文字表达。' },
+    'self-awareness': { score: 1, comment: '未检测到有效回答，无法体现自我认知。' },
+    motivation: { score: 1, comment: '未检测到有效回答，无法判断申请动机。' },
+  };
+
+  return { scores, totalScore: 1, grade: 'D', summary: '未检测到学生的实质性回答。' };
+}
+
+function isScoreResult(result: unknown): result is ScoreResult {
+  return typeof result === 'object' && result !== null;
+}
+
+function normalizeScoreResult(result: unknown, messages: { role: string; content: string }[]) {
+  const stats = getStudentAnswerStats(messages);
+  if (stats.substantiveCount === 0 || stats.signalLength < 8) {
+    return buildNoAnswerScore();
+  }
+
+  if (!isScoreResult(result)) return getFallbackScore(messages);
+
+  const scores = result.scores as ScoreMap | undefined;
+  if (!scores) return getFallbackScore(messages);
+
+  (Object.keys(SCORE_WEIGHTS) as ScoreKey[]).forEach((key) => {
+    scores[key] = {
+      score: clampScore(Number(scores[key]?.score ?? 1)),
+      comment: String(scores[key]?.comment ?? '缺少该维度的具体评语。'),
+    };
+  });
+
+  const totalScore = calculateTotalScore(scores);
+  return {
+    ...result,
+    scores,
+    totalScore,
+    grade: SCORE_GRADES.find(g => totalScore >= g.min && totalScore <= g.max)?.grade || 'D',
+  };
+}
+
 /**
  * 降级评分方案
  */
 function getFallbackScore(messages: { role: string; content: string }[]) {
-  const userMessages = messages.filter(m => m.role === 'user');
-  const totalLength = userMessages.reduce((sum, m) => sum + m.content.length, 0);
-  const avgLength = totalLength / Math.max(userMessages.length, 1);
-  const baseScore = Math.min(8, Math.max(3, avgLength / 100));
+  const stats = getStudentAnswerStats(messages);
+  if (stats.substantiveCount === 0 || stats.signalLength < 8) {
+    return buildNoAnswerScore();
+  }
 
-  const scores = {
-    logic: { score: Math.round((baseScore + Math.random() * 1.5) * 10) / 10, comment: '回答结构清晰，有基本逻辑框架。' },
-    depth: { score: Math.round((baseScore - 0.5 + Math.random() * 1.5) * 10) / 10, comment: '对专业领域有一定了解。' },
-    resilience: { score: Math.round((baseScore + 0.5 + Math.random() * 1) * 10) / 10, comment: '面对追问时能保持冷静。' },
-    communication: { score: Math.round((baseScore + Math.random() * 1) * 10) / 10, comment: '表达自然流畅。' },
-    'self-awareness': { score: Math.round((baseScore - 0.5 + Math.random() * 1.5) * 10) / 10, comment: '能认识到自己的优劣势。' },
-    motivation: { score: Math.round((baseScore + Math.random() * 1) * 10) / 10, comment: '动机明确。' },
+  const shortInterviewPenalty = stats.substantiveCount < 2 ? 1 : 0;
+  const baseScore = Math.min(8.2, Math.max(3, 3 + stats.avgSignalLength / 45 - shortInterviewPenalty));
+
+  const scores: ScoreMap = {
+    logic: { score: clampScore(baseScore + 0.2), comment: '回答有基本结构，但论点递进和总结仍可加强。' },
+    depth: { score: clampScore(baseScore - 0.4), comment: '内容具备可评估性，但细节和反思深度仍不足。' },
+    resilience: { score: clampScore(baseScore), comment: '能够完成回答，但追问应对需要更多轮次验证。' },
+    communication: { score: clampScore(baseScore + 0.1), comment: '表达基本可理解，但重点呈现仍有提升空间。' },
+    'self-awareness': { score: clampScore(baseScore - 0.3), comment: '有一定自我表达，但自我认知还不够具体。' },
+    motivation: { score: clampScore(baseScore - 0.1), comment: '能表达基本动机，但匹配度需要更充分展开。' },
   };
 
-  const totalScore = Math.round(
-    (scores.logic.score * 0.25 +
-      scores.depth.score * 0.20 +
-      scores.resilience.score * 0.15 +
-      scores.communication.score * 0.15 +
-      scores['self-awareness'].score * 0.15 +
-      scores.motivation.score * 0.10) * 10
-  ) / 10;
+  const totalScore = calculateTotalScore(scores);
 
   const grade = SCORE_GRADES.find(g => totalScore >= g.min && totalScore <= g.max)?.grade || 'C';
 
-  return { scores, totalScore, grade, summary: '面试整体表现良好。' };
+  return { scores, totalScore, grade, summary: '本次评分使用降级规则生成，仅根据学生有效回答估算。' };
 }
 
 /**
@@ -122,7 +228,7 @@ ${conversationText}
     if (content) {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        return normalizeScoreResult(JSON.parse(jsonMatch[0]), student.messages);
       }
     }
     throw new Error('Invalid response');

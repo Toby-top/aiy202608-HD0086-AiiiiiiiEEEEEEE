@@ -32,6 +32,13 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
   const [selectedMic, setSelectedMic] = useState('');
   const [error, setError] = useState('');
 
+  const closeAudioContext = useCallback(() => {
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      void audioContextRef.current.close().catch(() => undefined);
+    }
+    audioContextRef.current = null;
+  }, []);
+
   // 获取设备列表
   const getDevices = useCallback(async () => {
     try {
@@ -93,9 +100,7 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
       if (audioStream) {
         audioStream.getTracks().forEach((t) => t.stop());
       }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
+      closeAudioContext();
       cancelAnimationFrame(animationFrameRef.current);
 
       const constraints: MediaStreamConstraints = {
@@ -133,7 +138,7 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
     } finally {
       setMicLoading(false);
     }
-  }, [audioStream, selectedMic]);
+  }, [audioStream, closeAudioContext, selectedMic]);
 
   // 关闭麦克风
   const disableMic = useCallback(() => {
@@ -141,14 +146,11 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
       audioStream.getTracks().forEach((t) => t.stop());
       setAudioStream(null);
     }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
+    closeAudioContext();
     cancelAnimationFrame(animationFrameRef.current);
     setMicEnabled(false);
     setMicVolume(0);
-  }, [audioStream]);
+  }, [audioStream, closeAudioContext]);
 
   // 切换摄像头设备
   const handleCameraChange = useCallback(
@@ -175,16 +177,14 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
         if (audioStream) {
           audioStream.getTracks().forEach((t) => t.stop());
         }
-        if (audioContextRef.current) {
-          audioContextRef.current.close();
-        }
+        closeAudioContext();
         cancelAnimationFrame(animationFrameRef.current);
         setMicEnabled(false);
         setMicVolume(0);
         setTimeout(() => enableMic(), 100);
       }
     },
-    [micEnabled, audioStream, enableMic]
+    [micEnabled, audioStream, closeAudioContext, enableMic]
   );
 
   // 初始化
@@ -201,12 +201,10 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
         audioStreamRef.current.getTracks().forEach((t) => t.stop());
         audioStreamRef.current = null;
       }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
+      closeAudioContext();
       cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [getDevices]);
+  }, [closeAudioContext, getDevices]);
 
   useEffect(() => {
     cameraStreamRef.current = cameraStream;
@@ -233,13 +231,11 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
     if (audioStream) {
       audioStream.getTracks().forEach((t) => t.stop());
     }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-    }
+    closeAudioContext();
     cancelAnimationFrame(animationFrameRef.current);
 
     onStartInterview();
-  }, [cameraStream, audioStream, onStartInterview]);
+  }, [cameraStream, audioStream, closeAudioContext, onStartInterview]);
 
   return (
     <div className="flex h-full flex-col">

@@ -7,20 +7,32 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { getInterviewConfig } from '@/lib/interview-config';
-import type { InterviewType, InterviewSegment, InterviewPlayback } from '@/types/interview';
+import type { InterviewType, InterviewSegment, InterviewPlayback, StoredInterviewScore } from '@/types/interview';
 import { getMockPlayback } from '@/lib/mockInterview';
 import { AudioPlayer } from '@/components/interview/AudioPlayer';
 import { Timeline } from '@/components/interview/Timeline';
+import { RadarChart } from '@/components/RadarChart';
 import {
   ArrowLeft,
   BarChart3,
-  Target,
   MessageSquare,
   TrendingUp,
   PlayCircle,
 } from 'lucide-react';
 
 type TabType = 'report' | 'playback';
+
+const emptyScore: StoredInterviewScore = {
+  totalScore: 0,
+  maxScore: 100,
+  grade: '待生成',
+  overallComment: '未找到本次面试的评分数据，请从分析结果页重新进入报告。',
+  dimensions: [],
+  radarScores: {},
+  strengths: [],
+  improvements: ['重新完成面试后等待分析完成', '如果问题仍然存在，请确认浏览器没有清理本地数据'],
+  generatedAt: 0,
+};
 
 export default function ReportPage() {
   const params = useParams();
@@ -37,6 +49,7 @@ export default function ReportPage() {
 
   // 获取回放数据（优先从 localStorage 读取）
   const [playback, setPlayback] = useState<InterviewPlayback | null>(null);
+  const [scoreResult, setScoreResult] = useState<StoredInterviewScore>(emptyScore);
 
   useEffect(() => {
     try {
@@ -51,23 +64,20 @@ export default function ReportPage() {
     setPlayback(getMockPlayback());
   }, [id]);
 
-  const playbackData = playback || getMockPlayback();
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`interview-score-${id}`);
+      if (saved) {
+        setScoreResult(JSON.parse(saved));
+        return;
+      }
+    } catch {
+      // 读取失败时展示空评分状态
+    }
+    setScoreResult(emptyScore);
+  }, [id]);
 
-  // 模拟评分数据
-  const mockResult = {
-    totalScore: 78,
-    maxScore: 100,
-    grade: 'B+',
-    overallComment:
-      '整体表现良好，能够清晰地表达自己的想法。在内容深度和语言流畅度方面还有提升空间。建议在回答中加入更多具体的个人经历和细节，以增强说服力。',
-    dimensions: [
-      { name: '内容质量', score: 80, comment: '观点明确，但缺少具体案例支撑' },
-      { name: '语言表达', score: 75, comment: '表达较流畅，偶有停顿和重复' },
-      { name: '逻辑结构', score: 82, comment: '回答有条理，层次分明' },
-      { name: '自信程度', score: 78, comment: '整体自信，部分问题略显紧张' },
-      { name: '互动能力', score: 76, comment: '能回应追问，但主动性可提升' },
-    ],
-  };
+  const playbackData = playback || getMockPlayback();
 
   // 处理时间轴片段点击
   const handleSegmentClick = useCallback((segment: InterviewSegment) => {
@@ -145,17 +155,17 @@ export default function ReportPage() {
             <div className="mb-6 rounded-2xl border border-stone-200 bg-white p-6 text-center">
               <div className="mb-4 inline-flex h-20 w-20 items-center justify-center rounded-full bg-teal-50">
                 <span className="text-3xl font-bold text-teal-700">
-                  {mockResult.grade}
+                  {scoreResult.grade}
                 </span>
               </div>
               <div className="mb-2">
                 <span className="text-4xl font-bold text-stone-900">
-                  {mockResult.totalScore}
+                  {scoreResult.totalScore}
                 </span>
-                <span className="text-lg text-stone-400">/{mockResult.maxScore}</span>
+                <span className="text-lg text-stone-400">/{scoreResult.maxScore}</span>
               </div>
               <p className="text-sm leading-relaxed text-stone-600">
-                {mockResult.overallComment}
+                {scoreResult.overallComment}
               </p>
             </div>
 
@@ -166,14 +176,17 @@ export default function ReportPage() {
                 维度评分
               </h2>
               <div className="space-y-4">
-                {mockResult.dimensions.map((dim) => (
+                {scoreResult.dimensions.length === 0 && (
+                  <p className="text-sm text-stone-500">暂无维度评分。</p>
+                )}
+                {scoreResult.dimensions.map((dim) => (
                   <div key={dim.name}>
                     <div className="mb-1.5 flex items-center justify-between">
                       <span className="text-sm font-medium text-stone-700">
                         {dim.name}
                       </span>
                       <span className="font-mono text-sm text-stone-500">
-                        {dim.score}/100
+                        {dim.score}/{dim.maxScore}
                       </span>
                     </div>
                     <div className="mb-1 h-2 overflow-hidden rounded-full bg-stone-100">
@@ -188,14 +201,14 @@ export default function ReportPage() {
               </div>
             </div>
 
-            {/* 雷达图占位 */}
-            <div className="mb-6 rounded-2xl border border-dashed border-stone-300 bg-white p-6">
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Target className="mb-3 h-10 w-10 text-stone-300" />
-                <h3 className="mb-1 text-sm font-medium text-stone-500">雷达图分析</h3>
-                <p className="text-xs text-stone-400">
-                  此功能将在后续版本中实现，展示各维度能力的可视化对比
-                </p>
+            {/* 雷达图分析 */}
+            <div className="mb-6 rounded-2xl border border-stone-200 bg-white p-6">
+              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-stone-900">
+                <BarChart3 className="h-5 w-5 text-teal-600" />
+                雷达图分析
+              </h2>
+              <div className="mx-auto max-w-md">
+                <RadarChart scores={scoreResult.radarScores} />
               </div>
             </div>
 
@@ -206,12 +219,7 @@ export default function ReportPage() {
                 改进建议
               </h2>
               <div className="space-y-3">
-                {[
-                  '在回答中多使用 STAR 法则（情境-任务-行动-结果）来组织你的故事',
-                  '练习减少填充词（如 "um"、"like"），可以通过录音回听来识别',
-                  '准备 3-5 个核心故事，灵活应对不同类型的面试问题',
-                  '注意语速控制，重要观点前适当停顿，增强表达力度',
-                ].map((tip, i) => (
+                {scoreResult.improvements.map((tip, i) => (
                   <div
                     key={i}
                     className="flex items-start gap-2 rounded-lg bg-amber-50 p-3"

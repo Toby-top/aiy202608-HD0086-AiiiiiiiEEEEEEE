@@ -57,6 +57,29 @@ export interface InterviewResult {
   createdAt: number;
 }
 
+/** API 返回的 1-10 分制评分 */
+export interface ScoringApiResult {
+  scores: Record<string, { score: number; comment: string }>;
+  totalScore: number;
+  grade: string;
+  summary: string;
+  strengths?: string[];
+  improvements?: string[];
+}
+
+/** 报告页使用的 100 分制评分 */
+export interface StoredInterviewScore {
+  totalScore: number;
+  maxScore: number;
+  grade: string;
+  overallComment: string;
+  dimensions: ScoreDimension[];
+  radarScores: Record<string, number>;
+  strengths: string[];
+  improvements: string[];
+  generatedAt: number;
+}
+
 /** API 请求参数 */
 export interface InterviewRequest {
   interviewType: InterviewType;
@@ -98,6 +121,8 @@ export type InterviewStage = 'ice_breaking' | 'academics' | 'critical_thinking' 
 /** ASR 语音识别响应 */
 export interface ASRResponse {
   success: boolean;
+  text?: string;
+  duration?: number;
   data?: {
     text: string;
     duration?: number;
@@ -156,6 +181,8 @@ export interface InterviewPlayback {
   totalDuration: number;
   /** 面试片段列表 */
   segments: InterviewSegment[];
+  /** 对话记录 */
+  messages?: ChatMessage[];
   /** 创建时间 */
   createdAt: number;
 }

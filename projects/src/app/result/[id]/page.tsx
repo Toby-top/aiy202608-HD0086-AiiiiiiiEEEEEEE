@@ -7,6 +7,46 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { Loader2, CheckCircle2 } from 'lucide-react';
+import type { InterviewPlayback, ScoringApiResult, StoredInterviewScore } from '@/types/interview';
+
+const steps = [
+  '正在整理面试记录...',
+  '正在分析回答质量...',
+  '正在评估表达流畅度...',
+  '正在生成综合报告...',
+];
+
+const DIMENSION_LABELS: Record<string, string> = {
+  logic: '逻辑结构',
+  depth: '内容深度',
+  resilience: '追问应对',
+  communication: '语言表达',
+  'self-awareness': '自我认知',
+  motivation: '申请动机',
+};
+
+function toStoredScore(result: ScoringApiResult): StoredInterviewScore {
+  const radarScores = Object.fromEntries(
+    Object.entries(result.scores).map(([key, value]) => [key, value.score])
+  );
+
+  return {
+    totalScore: Math.round(result.totalScore * 10),
+    maxScore: 100,
+    grade: result.grade,
+    overallComment: result.summary,
+    dimensions: Object.entries(result.scores).map(([key, value]) => ({
+      name: DIMENSION_LABELS[key] ?? key,
+      score: Math.round(value.score * 10),
+      maxScore: 100,
+      comment: value.comment,
+    })),
+    radarScores,
+    strengths: result.strengths ?? [],
+    improvements: result.improvements ?? [],
+    generatedAt: Date.now(),
+  };
+}
 
 export default function ResultPage() {
   const params = useParams();
@@ -20,20 +60,13 @@ export default function ResultPage() {
   const [isComplete, setIsComplete] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
 
-  const steps = [
-    '正在转录语音内容...',
-    '正在分析回答质量...',
-    '正在评估表达流畅度...',
-    '正在生成综合报告...',
-  ];
-
-  // 模拟分析进度
+  // 分析进度兜底动画，真实评分完成后会直接收束到100。
   useEffect(() => {
     const progressInterval = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 100) {
+        if (prev >= 90) {
           clearInterval(progressInterval);
-          return 100;
+          return prev;
         }
         return prev + 2;
       });
@@ -50,7 +83,75 @@ export default function ResultPage() {
     if (progress >= 100) {
       setIsComplete(true);
     }
-  }, [progress, steps.length]);
+  }, [progress]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function generateScore() {
+      try {
+        setProgress((prev) => Math.max(prev, 15));
+        const saved = localStorage.getItem(`interview-${resultId}`);
+        if (!saved) {
+          throw new Error('Missing interview playback data');
+        }
+
+        const playback = JSON.parse(saved) as InterviewPlayback;
+        const scoreResponse = await fetch('/api/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            interviewType,
+            messages: (playback.messages ?? []).map((message) => ({
+              role: message.role === 'student' ? 'user' : 'assistant',
+              content: message.content,
+            })),
+          }),
+        });
+
+        if (!scoreResponse.ok) {
+          throw new Error(`Score request failed: ${scoreResponse.status}`);
+        }
+
+        setProgress((prev) => Math.max(prev, 75));
+        const scoreResult = (await scoreResponse.json()) as ScoringApiResult;
+        const storedScore = toStoredScore(scoreResult);
+        localStorage.setItem(`interview-score-${resultId}`, JSON.stringify(storedScore));
+
+        if (!cancelled) {
+          setProgress(100);
+          setIsComplete(true);
+        }
+      } catch {
+        if (!cancelled) {
+          const fallbackScore = toStoredScore({
+            scores: {
+              logic: { score: 1, comment: '评分生成失败，未能读取有效面试记录。' },
+              depth: { score: 1, comment: '评分生成失败，缺少可评估内容。' },
+              resilience: { score: 1, comment: '评分生成失败，无法评估追问应对。' },
+              communication: { score: 1, comment: '评分生成失败，无法评估表达质量。' },
+              'self-awareness': { score: 1, comment: '评分生成失败，无法评估自我认知。' },
+              motivation: { score: 1, comment: '评分生成失败，无法评估申请动机。' },
+            },
+            totalScore: 1,
+            grade: 'D',
+            summary: '未能生成有效评分，请确认面试记录存在并重新生成报告。',
+            strengths: [],
+            improvements: ['重新完成一次有效录音', '确认浏览器允许麦克风权限'],
+          });
+          localStorage.setItem(`interview-score-${resultId}`, JSON.stringify(fallbackScore));
+          setProgress(100);
+          setIsComplete(true);
+        }
+      }
+    }
+
+    generateScore();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resultId, interviewType]);
 
   // 跳转到报告页
   const handleViewReport = useCallback(() => {

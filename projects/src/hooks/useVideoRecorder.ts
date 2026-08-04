@@ -65,10 +65,24 @@ export function useVideoRecorder(): UseVideoRecorderReturn {
       });
       streamRef.current = stream;
 
+      if (!window.MediaRecorder) {
+        throw new Error('当前浏览器不支持视频录制');
+      }
+
+      const mimeTypes = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+      ];
+      const supportedMimeType = mimeTypes.find((type) =>
+        MediaRecorder.isTypeSupported(type)
+      );
+
       // 设置 MediaRecorder
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9,opus',
-      });
+      const mediaRecorder = new MediaRecorder(
+        stream,
+        supportedMimeType ? { mimeType: supportedMimeType } : undefined
+      );
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event: BlobEvent) => {
