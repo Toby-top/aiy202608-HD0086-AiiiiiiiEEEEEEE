@@ -3,6 +3,13 @@ import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
 import { SCORING_DIMENSIONS, SCORE_GRADES } from '@/lib/interview-prompt';
 
 /**
+ * POST /api/score
+ * 用途：单学生面试评分接口，根据完整面试记录生成 6 维度评分与改进建议。
+ * 输入：JSON body，包含 messages: { role: string; content: string }[] 和 interviewType: string。
+ * 返回：JSON，包含 scores、totalScore、grade、summary、strengths、improvements。
+ */
+
+/**
  * 评分系统提示词
  */
 const SCORING_SYSTEM_PROMPT = `你是一位经验丰富的国际高中升学面试评分专家。你的任务是根据面试对话记录，对学生的表现进行多维度评分。

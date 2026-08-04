@@ -1,11 +1,12 @@
 import { NextRequest } from 'next/server';
-import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
+import { LLMClient, Config } from 'coze-coding-dev-sdk';
 import { SCORING_DIMENSIONS, SCORE_GRADES } from '@/lib/interview-prompt';
 
 /**
- * 批量评分 API
- * 输入：多个学生的面试记录
- * 输出：每个学生的评分报告（用于对比）
+ * POST /api/score/batch
+ * 用途：批量评分对比接口，为 2-10 个学生生成可横向比较的评分报告。
+ * 输入：JSON body，包含 students: StudentRecord[]，每个学生含 id、name、messages、interviewType。
+ * 返回：JSON，成功时为 { results: StudentScore[] }，失败时为 { error: string }。
  */
 
 interface StudentRecord {

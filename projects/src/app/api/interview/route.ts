@@ -3,6 +3,37 @@ import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
 import { INTERVIEWER_SYSTEM_PROMPT } from '@/lib/interview-prompt';
 
 /**
+ * POST /api/interview
+ * 用途：AI 面试官对话接口，根据历史消息与系统提示词生成下一轮追问。
+ * 输入：新版前端传入 { interviewType, message, history }；旧版前端传入 { messages }。
+ * 返回：新版前端返回 { success, data: { reply, messageId, uiCmd } }；
+ *      旧版前端返回 text/event-stream，逐段发送 { content }，结束为 data: [DONE]。
+ */
+
+type InterviewStage = 'ice_breaking' | 'academics' | 'critical_thinking' | 'wrap_up';
+
+interface UICmdResponse {
+  action: 'ask' | 'follow_up' | 'end';
+  speaker_name: string;
+  speech_text: string;
+  subtitle_text: string;
+  chat_bubble: string;
+  mic_status: 'on' | 'off';
+  camera_status: 'on' | 'off';
+  current_stage: InterviewStage;
+  score_hidden: {
+    fluency: number;
+    logic: number;
+    confidence: number;
+  };
+}
+
+interface ClientMessage {
+  role: string;
+  content: string;
+}
+
+/**
  * Fallback responses when LLM is unavailable
  */
 const FALLBACK_RESPONSES = [
@@ -22,13 +53,101 @@ function getFallbackResponse(messageCount: number): string {
   return FALLBACK_RESPONSES[index];
 }
 
-export async function POST(request: NextRequest) {
-  const { messages } = await request.json();
-  const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
+function getStage(messageCount: number): InterviewStage {
+  if (messageCount >= 8) return 'wrap_up';
+  if (messageCount >= 5) return 'critical_thinking';
+  if (messageCount >= 2) return 'academics';
+  return 'ice_breaking';
+}
 
-  const config = new Config();
-  const client = new LLMClient(config, customHeaders);
+function getHiddenScore(message: string) {
+  const wordCount = message.trim().split(/\s+/).filter(Boolean).length;
+  const fluency = Math.min(5, Math.max(1, Math.ceil(wordCount / 8)));
 
+  return {
+    fluency,
+    logic: Math.min(5, Math.max(3, Math.ceil(wordCount / 12))),
+    confidence: Math.min(5, Math.max(3, Math.ceil(wordCount / 10))),
+  };
+}
+
+function buildUICmd(replyText: string, historyLength: number, userMessage: string): UICmdResponse {
+  const stage = getStage(historyLength);
+  const isEnd = /interview is now complete|thank you for your time|面试.*结束/i.test(replyText);
+
+  return {
+    action: isEnd ? 'end' : historyLength > 2 ? 'follow_up' : 'ask',
+    speaker_name: 'Dr. Anderson',
+    speech_text: replyText,
+    subtitle_text: replyText,
+    chat_bubble: replyText,
+    mic_status: isEnd ? 'off' : 'on',
+    camera_status: 'on',
+    current_stage: stage,
+    score_hidden: getHiddenScore(userMessage),
+  };
+}
+
+function normalizeHistory(history: ClientMessage[] = []): ClientMessage[] {
+  return history
+    .filter((msg) => msg.content)
+    .map((msg) => ({
+      role: msg.role === 'student' || msg.role === 'user' ? 'user' : 'assistant',
+      content: msg.content,
+    }));
+}
+
+async function handleJsonInterview(
+  body: { interviewType?: string; message?: string; history?: ClientMessage[] },
+  client: LLMClient
+) {
+  const history = normalizeHistory(body.history);
+  const userMessage = body.message?.trim();
+
+  if (!body.interviewType || !userMessage) {
+    return Response.json(
+      { success: false, error: '缺少必要参数' },
+      { status: 400 }
+    );
+  }
+
+  const allMessages = [
+    { role: 'system' as const, content: INTERVIEWER_SYSTEM_PROMPT },
+    ...history.map((msg) => ({
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content,
+    })),
+    {
+      role: 'user' as const,
+      content: `面试类型：${body.interviewType}\n学生回答：${userMessage}`,
+    },
+  ];
+
+  let replyText = getFallbackResponse(history.length + 1);
+
+  try {
+    const response = await client.invoke(allMessages, {
+      model: 'doubao-seed-1-8-251228',
+      temperature: 0.8,
+    });
+    replyText = response.content?.toString() || replyText;
+  } catch (error) {
+    console.error('JSON interview error:', error);
+  }
+
+  const uiCmd = buildUICmd(replyText, history.length, userMessage);
+
+  return Response.json({
+    success: true,
+    data: {
+      reply: `[UI_CMD]${JSON.stringify(uiCmd)}`,
+      messageId: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      uiCmd,
+    },
+  });
+}
+
+function handleStreamInterview(messages: ClientMessage[], client: LLMClient) {
   // Build the message array with system prompt
   const systemMessage = {
     role: 'system' as const,
@@ -119,4 +238,18 @@ export async function POST(request: NextRequest) {
       },
     });
   }
+}
+
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
+  const config = new Config();
+  const client = new LLMClient(config, customHeaders);
+
+  if (body.message) {
+    return handleJsonInterview(body, client);
+  }
+
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  return handleStreamInterview(messages, client);
 }
