@@ -29,7 +29,11 @@ export async function POST(request: NextRequest) {
 
     if (arrayBuffer.byteLength === 0) {
       return NextResponse.json(
-        { success: false, error: 'Audio file is empty' },
+        {
+          success: false,
+          error: 'Audio file is empty',
+          debug: { type: audioFile.type, size: audioFile.size },
+        },
         { status: 400 }
       );
     }
@@ -49,18 +53,24 @@ export async function POST(request: NextRequest) {
         text: result.text,
         duration: result.duration,
       },
+      debug: {
+        type: audioFile.type,
+        size: audioFile.size,
+      },
     });
   } catch (error) {
     console.error('ASR error:', error);
+    const message = error instanceof Error ? error.message : String(error);
     // Return graceful fallback - ASR is optional, user can type instead
     return NextResponse.json({
-      success: true,
+      success: false,
       text: '',
       duration: 0,
       data: {
         text: '',
         duration: 0,
       },
+      error: message || 'ASR service temporarily unavailable',
       message: 'ASR service temporarily unavailable, please use text input',
     });
   }

@@ -90,7 +90,7 @@ export default function InterviewPage() {
 
   // 设备测试完成后开始面试
   const handleStartInterview = useCallback(
-    async (type: InterviewType) => {
+    (type: InterviewType) => {
       // 防止重复调用
       if (status !== 'idle') return;
 
@@ -98,15 +98,15 @@ export default function InterviewPage() {
       if (!config) return;
 
       const openingText = getOpeningMessage(type);
-      const audioUrl = await synthesizeSpeech(openingText);
       questionCountRef.current = 1;
       const openingMessage: ChatMessage = {
         id: generateId(),
         role: 'interviewer',
         content: openingText,
         timestamp: Date.now(),
-        audioUrl,
         duration: Math.max(5, openingText.length * 0.06),
+        subtitle: openingText,
+        stage: 'ice_breaking',
       };
 
       setMessages([openingMessage]);
@@ -127,6 +127,15 @@ export default function InterviewPage() {
           annotations: [],
         },
       ];
+
+      void synthesizeSpeech(openingText).then((audioUrl) => {
+        if (!audioUrl) return;
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === openingMessage.id ? { ...message, audioUrl } : message
+          )
+        );
+      });
     },
     [synthesizeSpeech, timer, status, videoRecorder]
   );
@@ -195,7 +204,12 @@ export default function InterviewPage() {
     let recognizedText = '';
     try {
       const formData = new FormData();
-      formData.append('audio', blob, 'recording.webm');
+      const extension = blob.type.includes('ogg')
+        ? 'ogg'
+        : blob.type.includes('mp4')
+          ? 'm4a'
+          : 'webm';
+      formData.append('audio', blob, `recording.${extension}`);
 
       const asrResponse = await fetch('/api/asr', {
         method: 'POST',
@@ -208,10 +222,15 @@ export default function InterviewPage() {
       if (asrData.success && text?.trim()) {
         recognizedText = text.trim();
       } else {
-        recognizedText = '(未检测到有效语音)';
+        const detail = asrData.error || asrData.message || '未检测到有效语音';
+        const debug = asrData.debug?.type
+          ? `，格式：${asrData.debug.type}，大小：${asrData.debug.size ?? 0} bytes`
+          : '';
+        recognizedText = `(${detail}${debug})`;
       }
-    } catch {
-      recognizedText = '(语音识别暂不可用)';
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : '语音识别暂不可用';
+      recognizedText = `(${detail})`;
     }
 
     setMessages((prev) =>

@@ -93,7 +93,12 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         throw new Error('当前浏览器不支持录音');
       }
 
-      const mimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+      const mimeTypes = [
+        'audio/ogg;codecs=opus',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+      ];
       const supportedMimeType = mimeTypes.find((type) =>
         MediaRecorder.isTypeSupported(type)
       );

@@ -128,6 +128,11 @@ export interface ASRResponse {
     duration?: number;
   };
   error?: string;
+  message?: string;
+  debug?: {
+    type?: string;
+    size?: number;
+  };
 }
 
 /** AI 标注类型 */
