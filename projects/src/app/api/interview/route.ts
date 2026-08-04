@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
+import { createChatCompletion } from '@/lib/ai-provider';
 import { INTERVIEWER_SYSTEM_PROMPT } from '@/lib/interview-prompt';
 
 /**
@@ -127,25 +128,10 @@ async function handleJsonInterview(
 
   try {
     if (process.env.DEEPSEEK_API_KEY) {
-      const deepseekResponse = await fetch('https://api.deepseek.com/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
-          temperature: 0.7,
-          messages: allMessages,
-        }),
+      replyText = await createChatCompletion({
+        messages: allMessages,
+        temperature: 0.7,
       });
-
-      if (!deepseekResponse.ok) {
-        throw new Error(`DeepSeek request failed: ${deepseekResponse.status}`);
-      }
-
-      const data = await deepseekResponse.json();
-      replyText = data.choices?.[0]?.message?.content?.trim() || replyText;
     } else {
       const response = await client.invoke(allMessages, {
         model: 'doubao-seed-1-8-251228',
@@ -185,6 +171,42 @@ function handleStreamInterview(messages: ClientMessage[], client: LLMClient) {
   ];
 
   try {
+    if (process.env.DEEPSEEK_API_KEY) {
+      const encoder = new TextEncoder();
+      const readableStream = new ReadableStream({
+        async start(controller) {
+          try {
+            const content = await createChatCompletion({
+              messages: allMessages,
+              temperature: 0.7,
+            });
+
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+            );
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+          } catch (error) {
+            console.error('DeepSeek stream fallback error:', error);
+            const fallback = getFallbackResponse(messages.length);
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ content: fallback })}\n\n`)
+            );
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+          }
+        },
+      });
+
+      return new Response(readableStream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+      });
+    }
+
     const stream = client.stream(allMessages, {
       model: 'doubao-seed-1-8-251228',
       temperature: 0.8,

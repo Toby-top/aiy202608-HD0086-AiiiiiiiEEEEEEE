@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
+import { createChatCompletion, extractJsonObject } from '@/lib/ai-provider';
 import { SCORING_DIMENSIONS, SCORE_GRADES } from '@/lib/interview-prompt';
 
 /**
@@ -224,10 +225,6 @@ function getFallbackScore(messages: { role: string; content: string }[]) {
 
 export async function POST(request: NextRequest) {
   const { messages, interviewType } = await request.json();
-  const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
-
-  const config = new Config();
-  const client = new LLMClient(config, customHeaders);
 
   // Build the message array
   const conversationText = messages
@@ -242,30 +239,38 @@ export async function POST(request: NextRequest) {
   };
 
   try {
-    const response = await client.invoke(
-      [
-        { role: 'system', content: SCORING_SYSTEM_PROMPT },
-        userMessage,
-      ],
-      {
-        model: 'doubao-seed-1-8-251228',
-        temperature: 0.3,
-      },
-    );
+    let content = '';
 
-    const content = response.content?.toString() || '';
-    // Try to parse JSON from response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const result = JSON.parse(jsonMatch[0]);
-      return Response.json(normalizeScoreResult(result, messages));
+    if (process.env.DEEPSEEK_API_KEY) {
+      content = await createChatCompletion({
+        messages: [
+          { role: 'system', content: SCORING_SYSTEM_PROMPT },
+          userMessage,
+        ],
+        temperature: 0.2,
+        responseFormat: 'json_object',
+      });
+    } else {
+      const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
+      const config = new Config();
+      const client = new LLMClient(config, customHeaders);
+      const response = await client.invoke(
+        [
+          { role: 'system', content: SCORING_SYSTEM_PROMPT },
+          userMessage,
+        ],
+        {
+          model: 'doubao-seed-1-8-251228',
+          temperature: 0.3,
+        },
+      );
+      content = response.content?.toString() || '';
     }
 
-    // Fallback if parsing fails
-    return Response.json(getFallbackScore(messages));
+    const result = extractJsonObject(content);
+    return Response.json(normalizeScoreResult(result, messages));
   } catch (error) {
     console.error('Scoring error:', error);
-    // Use fallback scoring
     return Response.json(getFallbackScore(messages));
   }
 }

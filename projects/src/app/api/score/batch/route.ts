@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { LLMClient, Config } from 'coze-coding-dev-sdk';
+import { createChatCompletion, extractJsonObject } from '@/lib/ai-provider';
 import { SCORING_DIMENSIONS, SCORE_GRADES } from '@/lib/interview-prompt';
 
 /**
@@ -195,14 +196,9 @@ function getFallbackScore(messages: { role: string; content: string }[]) {
  * 对单个学生进行评分
  */
 async function scoreStudent(
-  client: LLMClient,
-  student: StudentRecord,
-  useFallback: boolean
+  client: LLMClient | null,
+  student: StudentRecord
 ) {
-  if (useFallback) {
-    return getFallbackScore(student.messages);
-  }
-
   const conversationText = student.messages
     .map(m => `${m.role === 'user' ? '学生' : '面试官'}: ${m.content}`)
     .join('\n');
@@ -216,22 +212,33 @@ ${conversationText}
 请严格按照JSON格式输出评分结果。`;
 
   try {
-    const response = await client.invoke(
-      [
-        { role: 'system', content: SCORING_SYSTEM_PROMPT },
-        { role: 'user', content: prompt },
-      ],
-      { model: 'kimi-k2-5-260127' }
-    );
+    let content = '';
 
-    const content = response.content;
-    if (content) {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return normalizeScoreResult(JSON.parse(jsonMatch[0]), student.messages);
+    if (process.env.DEEPSEEK_API_KEY) {
+      content = await createChatCompletion({
+        messages: [
+          { role: 'system', content: SCORING_SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.2,
+        responseFormat: 'json_object',
+      });
+    } else {
+      if (!client) {
+        throw new Error('Fallback LLM client is not available');
       }
+
+      const response = await client.invoke(
+        [
+          { role: 'system', content: SCORING_SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        { model: 'kimi-k2-5-260127', temperature: 0.3 }
+      );
+      content = response.content?.toString() || '';
     }
-    throw new Error('Invalid response');
+
+    return normalizeScoreResult(extractJsonObject(content), student.messages);
   } catch {
     return getFallbackScore(student.messages);
   }
@@ -256,27 +263,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const config = new Config();
-    const client = new LLMClient(config);
-
-    // 先测试 LLM 是否可用
-    let useFallback = false;
-    try {
-      const testResponse = await client.invoke(
-        [{ role: 'user', content: 'test' }],
-        { model: 'kimi-k2-5-260127' }
-      );
-      if (!testResponse.content) {
-        useFallback = true;
-      }
-    } catch {
-      useFallback = true;
-    }
+    const client = process.env.DEEPSEEK_API_KEY ? null : new LLMClient(new Config());
 
     // 并行评分所有学生
     const results = await Promise.all(
       students.map(async (student) => {
-        const scoreResult = await scoreStudent(client, student, useFallback);
+        const scoreResult = await scoreStudent(client, student);
         return {
           id: student.id,
           name: student.name,
