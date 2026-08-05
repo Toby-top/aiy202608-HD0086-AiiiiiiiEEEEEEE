@@ -152,6 +152,8 @@ const TYPE_ICONS: Record<InterviewType, typeof GraduationCap> = {
   initialview: Video,
 };
 
+const DEFAULT_SPEECH_LANGUAGE: 'en' | 'zh' = 'en';
+
 export default function InterviewPage() {
   const params = useParams();
   const router = useRouter();
@@ -166,7 +168,7 @@ export default function InterviewPage() {
   const [isAITalking, setIsAITalking] = useState(false);
   const [hostName, setHostName] = useState('AI 面试官');
   const [aiMinutes, setAiMinutes] = useState<string[]>([]);
-  const [languageMode, setLanguageMode] = useState<'en' | 'zh'>('en');
+  const [languageMode, setLanguageMode] = useState<'en' | 'zh'>(DEFAULT_SPEECH_LANGUAGE);
   const [currentStage, setCurrentStage] = useState<NonNullable<ChatMessage['stage']>>('ice_breaking');
   const [showAiMinutes, setShowAiMinutes] = useState(false);
   const [showChatPanel, setShowChatPanel] = useState(false);
@@ -333,7 +335,7 @@ export default function InterviewPage() {
       const openingText = getOpeningMessage(type);
       questionCountRef.current = 1;
       setHostName(type === 'alumni' ? '校友面试官' : 'AI 面试官');
-      setLanguageMode(type === 'initialview' ? 'en' : 'zh');
+      setLanguageMode(DEFAULT_SPEECH_LANGUAGE);
       setCurrentStage('ice_breaking');
       setAiMinutes([`${config.title} 已开始，当前阶段：${STAGE_NAMES.ice_breaking}。`]);
       setWaitingForAnswer(false);
