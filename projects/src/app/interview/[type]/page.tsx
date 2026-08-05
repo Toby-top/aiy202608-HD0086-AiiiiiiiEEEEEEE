@@ -542,6 +542,10 @@ export default function InterviewPage() {
 
       const data = await response.json();
 
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || data.error || 'DeepSeek 实时回复失败');
+      }
+
       if (data.success && data.data) {
         // 解析 UI_CMD 数据
         const uiCmd = data.data.uiCmd;
@@ -590,49 +594,24 @@ export default function InterviewPage() {
           annotations: [],
         });
       }
-    } catch {
-      const fallbackReplies = [
-        'Great answer! Let me ask you another question. What do you think is the biggest challenge in your learning journey? How did you overcome it?',
-        "Thank you for sharing. Now I'd like to know about your extracurricular activities. Which one has influenced you the most?",
-        'Interesting perspective. Can you describe a time when you faced a difficult situation? What did you learn from that experience?',
-        'Your response shows great depth. If you could choose any subject to study in depth, what would it be and why?',
-      ];
-      const randomReply =
-        fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'DeepSeek 实时回复失败，请检查模型配置后重试。';
       const aiMessage: ChatMessage = {
         id: generateId(),
-        role: 'interviewer',
-        content: randomReply,
+        role: 'system',
+        content: errorMessage,
         timestamp: Date.now(),
-        audioUrl: await synthesizeSpeech(randomReply),
-        duration: Math.max(3, randomReply.length * 0.06),
       };
       setMessages((prev) => [...prev, aiMessage]);
-      setIsAITalking(true);
       setAiMinutes((prev) => [
         ...prev,
         `学生：${recognizedText}`,
-        `面试官：${randomReply}`,
+        `系统：${errorMessage}`,
       ].slice(-12));
-      setTimeout(() => {
-        setIsAITalking(false);
-        setWaitingForAnswer(true);
-      }, (aiMessage.duration || 5) * 1000 + 500);
-
-      questionCountRef.current += 1;
-      segmentsRef.current.push({
-        id: `seg-question-${Date.now()}`,
-        type: 'question',
-        role: 'interviewer',
-        content: randomReply,
-        startTime: studentEndTime,
-        endTime: timer.seconds,
-        questionIndex: questionCountRef.current,
-        annotations: [],
-      });
+      setWaitingForAnswer(true);
     } finally {
       setIsTyping(false);
     }

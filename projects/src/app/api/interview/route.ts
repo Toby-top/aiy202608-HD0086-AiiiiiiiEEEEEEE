@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createChatCompletion } from '@/lib/ai-provider';
+import { createChatCompletion, isDeepSeekConfigured } from '@/lib/ai-provider';
 import { INTERVIEWER_SYSTEM_PROMPT } from '@/lib/interview-prompt';
 
 /**
@@ -31,26 +31,6 @@ interface UICmdResponse {
 interface ClientMessage {
   role: string;
   content: string;
-}
-
-/**
- * Fallback responses when LLM is unavailable
- */
-const FALLBACK_RESPONSES = [
-  "Hello! Welcome to your interview. I'm Dr. Anderson, and I'm delighted to meet you today. This interview is a chance for me to get to know you better beyond your application. There are no right or wrong answers - I just want to hear your story. Shall we begin with you telling me a little about yourself?",
-  "That's wonderful! Thank you for sharing that. Now, I'd love to hear about your academic interests. What subject or field excites you the most, and why?",
-  "Very interesting! Can you tell me more about what drew you to that subject? Have you had any opportunities to explore it outside of the classroom?",
-  "That's great to hear. Now let's talk about your extracurricular activities. What's the activity you're most involved in or passionate about?",
-  "Tell me more about your role in that activity. What challenges have you faced, and how did you overcome them?",
-  "That shows real growth. Now, can you tell me about a time when you faced a significant challenge or failure? How did you handle it?",
-  "Thank you for sharing that - it takes courage to reflect on difficult experiences. Now, I'm curious - why are you interested in attending our university? What specifically attracts you?",
-  "That's thoughtful. Before we wrap up, do you have any questions for me? I'd love to hear what you're curious about.",
-  "Thank you so much for your time today. It was a pleasure getting to know you. The interview is now complete. We wish you all the best in your application!",
-];
-
-function getFallbackResponse(messageCount: number): string {
-  const index = Math.min(Math.floor(messageCount / 2), FALLBACK_RESPONSES.length - 1);
-  return FALLBACK_RESPONSES[index];
 }
 
 function getStage(messageCount: number): InterviewStage {
@@ -118,22 +98,30 @@ async function handleJsonInterview(
     })),
     {
       role: 'user' as const,
-      content: `面试类型：${body.interviewType}\n学生回答：${userMessage}`,
+      content: [
+        `面试类型：${body.interviewType}`,
+        `学生回答：${userMessage}`,
+        '',
+        '请实时回应这位学生刚才的具体回答，先用一句话承接，再问一个自然追问。不要照搬题库原句，不要连续问多个问题。',
+      ].join('\n'),
     },
   ];
 
-  let replyText = getFallbackResponse(history.length + 1);
-
-  try {
-    if (process.env.DEEPSEEK_API_KEY) {
-      replyText = await createChatCompletion({
-        messages: allMessages,
-        temperature: 0.7,
-      });
-    }
-  } catch (error) {
-    console.error('Interview model error:', error);
+  if (!isDeepSeekConfigured()) {
+    return Response.json(
+      {
+        success: false,
+        error: 'DeepSeek is not configured',
+        message: 'DeepSeek 未配置或仍是占位 key，请配置有效 DEEPSEEK_API_KEY 后再继续面试。',
+      },
+      { status: 503 }
+    );
   }
+
+  const replyText = await createChatCompletion({
+    messages: allMessages,
+    temperature: 0.8,
+  });
 
   const uiCmd = buildUICmd(replyText, history.length, userMessage);
 
@@ -162,106 +150,66 @@ function handleStreamInterview(messages: ClientMessage[]) {
     })),
   ];
 
-  try {
-    if (process.env.DEEPSEEK_API_KEY) {
-      const encoder = new TextEncoder();
-      const readableStream = new ReadableStream({
-        async start(controller) {
-          try {
-            const content = await createChatCompletion({
-              messages: allMessages,
-              temperature: 0.7,
-            });
-
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
-            );
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            controller.close();
-          } catch (error) {
-            console.error('DeepSeek stream fallback error:', error);
-            const fallback = getFallbackResponse(messages.length);
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ content: fallback })}\n\n`)
-            );
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            controller.close();
-          }
-        },
-      });
-
-      return new Response(readableStream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-        },
-      });
-    }
-
-    const encoder = new TextEncoder();
-
-    const readableStream = new ReadableStream({
-      start(controller) {
-        try {
-          const fallback = getFallbackResponse(messages.length);
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ content: fallback })}\n\n`)
-          );
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          controller.close();
-        } catch (error) {
-          console.error('Stream error:', error);
-          // Use fallback response on error
-          const fallback = getFallbackResponse(messages.length);
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ content: fallback })}\n\n`)
-          );
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          controller.close();
-        }
+  if (!isDeepSeekConfigured()) {
+    return Response.json(
+      {
+        success: false,
+        error: 'DeepSeek is not configured',
+        message: 'DeepSeek 未配置或仍是占位 key，请配置有效 DEEPSEEK_API_KEY 后再继续面试。',
       },
-    });
+      { status: 503 }
+    );
+  }
 
-    return new Response(readableStream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      },
-    });
-  } catch (error) {
-    console.error('LLM error:', error);
-    // Return fallback response
-    const fallback = getFallbackResponse(messages.length);
-    const encoder = new TextEncoder();
-    const readableStream = new ReadableStream({
-      start(controller) {
+  const encoder = new TextEncoder();
+  const readableStream = new ReadableStream({
+    async start(controller) {
+      try {
+        const content = await createChatCompletion({
+          messages: allMessages,
+          temperature: 0.8,
+        });
+
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ content: fallback })}\n\n`)
+          encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
         );
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         controller.close();
-      },
-    });
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
 
-    return new Response(readableStream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      },
-    });
-  }
+  return new Response(readableStream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    },
+  });
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  try {
+    const body = await request.json();
 
-  if (body.message) {
-    return handleJsonInterview(body);
+    if (body.message) {
+      return handleJsonInterview(body);
+    }
+
+    const messages = Array.isArray(body.messages) ? body.messages : [];
+    return handleStreamInterview(messages);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Interview API error:', message);
+    return Response.json(
+      {
+        success: false,
+        error: 'DeepSeek request failed',
+        message: 'DeepSeek 实时回复失败，请检查 DEEPSEEK_API_KEY、网络或模型配置。',
+      },
+      { status: 502 }
+    );
   }
-
-  const messages = Array.isArray(body.messages) ? body.messages : [];
-  return handleStreamInterview(messages);
 }

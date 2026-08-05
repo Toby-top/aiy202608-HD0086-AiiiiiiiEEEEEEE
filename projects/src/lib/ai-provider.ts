@@ -21,14 +21,15 @@ interface DeepSeekChatCompletion {
 
 function getDeepSeekConfig() {
   return {
-    apiKey: process.env.DEEPSEEK_API_KEY,
+    apiKey: process.env.DEEPSEEK_API_KEY?.trim(),
     baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
     model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
   };
 }
 
 export function isDeepSeekConfigured() {
-  return Boolean(getDeepSeekConfig().apiKey);
+  const apiKey = getDeepSeekConfig().apiKey;
+  return Boolean(apiKey && !/^sk-your-|^your_/i.test(apiKey));
 }
 
 export async function createChatCompletion({
@@ -38,7 +39,7 @@ export async function createChatCompletion({
 }: ChatCompletionOptions) {
   const { apiKey, baseUrl, model } = getDeepSeekConfig();
 
-  if (!apiKey) {
+  if (!isDeepSeekConfigured()) {
     throw new Error('DEEPSEEK_API_KEY is not configured');
   }
 
