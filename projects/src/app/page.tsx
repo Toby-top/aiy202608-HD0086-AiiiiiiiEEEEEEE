@@ -13,11 +13,11 @@ export default function HomePage() {
       {/* 移动端顶部展示区 */}
       <div className="lg:hidden relative h-64 overflow-hidden">
         <Image
-          src="/hero-interview.png"
+          src="/hero-interview-v3.png"
           alt="国际高中面试场景"
           fill
           sizes="100vw"
-          className="object-cover"
+          className="object-cover object-center"
           priority
         />
         <div className="absolute inset-0 bg-gradient-to-b from-teal-900/70 via-teal-900/50 to-teal-900/80" />
@@ -45,16 +45,16 @@ export default function HomePage() {
         {/* 左侧展示区 - 桌面端 */}
         <div className="hidden lg:flex lg:flex-1 relative overflow-hidden">
           <Image
-            src="/hero-interview.png"
+            src="/hero-interview-v3.png"
             alt="国际高中面试场景"
             fill
             sizes="(max-width: 1024px) 0vw, 50vw"
             className="object-cover"
             priority
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-teal-900/80 via-teal-900/50 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-l from-teal-950/90 via-teal-900/60 to-transparent" />
 
-          <div className="relative z-10 flex flex-col justify-center px-12 xl:px-16 max-w-2xl">
+          <div className="relative z-10 ml-auto flex w-full max-w-xl flex-col justify-center px-10 xl:px-12">
             <div className="mb-8 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
