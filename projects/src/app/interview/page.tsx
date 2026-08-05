@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import type { InterviewType } from '@/types/interview';
 import { getInterviewConfig, INTERVIEW_TYPES } from '@/lib/interview-config';
 import { Sidebar } from '@/components/interview/Sidebar';
+import { MobileSidebarDrawer } from '@/components/interview/MobileSidebarDrawer';
 import { DeviceTest } from '@/components/interview/DeviceTest';
 import {
   GraduationCap,
@@ -79,23 +80,14 @@ export default function InterviewPage() {
         />
       </div>
 
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <button
-            className="absolute inset-0 bg-black/30"
-            onClick={() => setSidebarOpen(false)}
-            aria-label="关闭侧边栏遮罩"
-          />
-          <div className="absolute inset-y-0 left-0">
-            <Sidebar
-              interviewType=""
-              messageCount={0}
-              duration={0}
-              onNewChat={handleNewChat}
-            />
-          </div>
-        </div>
-      )}
+      <MobileSidebarDrawer open={sidebarOpen} onClose={() => setSidebarOpen(false)}>
+        <Sidebar
+          interviewType=""
+          messageCount={0}
+          duration={0}
+          onNewChat={handleNewChat}
+        />
+      </MobileSidebarDrawer>
 
       {/* Main Content */}
       <div className="flex flex-1 flex-col overflow-hidden">

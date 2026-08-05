@@ -1,95 +1,90 @@
 # AI 国际高中面试辅导系统
+> 帮国际高中申请者进行高仿真英文面试练习、即时追问与复盘评分
 
-AI 国际高中面试辅导系统是一套面向国际高中学生的模拟面试与评估工具。系统通过 AI 面试官还原海外大学面试场景，支持语音输入、实时追问、面试记录保存、6 维度评分报告和多学生横向对比，帮助学生在正式申请面试前进行高强度练习与复盘。
+🏆 **AIY 黑客松 2026 深圳站** 参赛作品  
+🏷 命题企业 / 赛道：【Coze · 智能体方向】  
+👤 团队：【AiiiiiiiEEEEEEE】  
+🔢 团队编号：【HD0086】（组委会分配）
 
-## 功能清单
+---
 
-- 3 种面试类型：Common App Interview、Alumni Interview、Initialview Interview。
-- AI 面试官：基于系统提示词进行分阶段提问、追问和压力情境模拟。
-- 6 维度评分：逻辑表达、专业深度、抗压能力、沟通亲和力、自我认知、匹配动机。
-- 雷达图报告：用 Chart.js 展示单次面试的多维评分表现。
-- 学生对比：支持选择 2-10 个学生进行批量评分、雷达图对比、表格对比和 CSV/JSON 导出。
-- 语音能力：支持浏览器语音识别兜底与浏览器 TTS 面试官语音播放。
+# 👥 团队分工
 
-## 技术栈
+| 成员 | 负责 |
+|---|---|
+| A | 产品设计、面试流程设计、评分维度定义 |
+| B | AI 面试官提示词、DeepSeek 对话与转写润色流程 |
+| C | 前端界面、录音回放、设备测试、移动端交互 |
+| D | 测试验收、演示材料、异常场景验证 |
 
-- Next.js 16
-- React 19
-- TypeScript
-- Tailwind CSS
-- Chart.js / react-chartjs-2
-- OpenNext for Cloudflare / Wrangler
+# ✨ 它能做什么
 
-## API 接口列表
+- 模拟 3 类国际学校 / 留学申请面试：Common App、Alumni Interview、Initialview。
+- AI 面试官会根据学生回答继续追问，而不是机械播放固定题库。
+- 支持浏览器麦克风录音、录音回放、摄像头预览和设备测试。
+- 使用浏览器实时转写学生回答，并交给 DeepSeek 做轻量纠错、补标点和语句整理。
+- 自动生成 6 维度面试评分：逻辑表达、专业深度、抗压能力、沟通亲和力、自我认知、动机匹配。
+- 生成可复盘的面试报告，支持雷达图展示、聊天记录回看和多学生横向对比。
 
-| 接口 | 方法 | 用途 | 输入 | 返回 |
-| --- | --- | --- | --- | --- |
-| `/api/interview` | `POST` | 面试官流式对话接口 | `messages`、`interviewType` | `text/event-stream`，流式返回 `{ content }`，结束为 `[DONE]` |
-| `/api/score` | `POST` | 单学生评分接口 | `messages`、`interviewType` | `scores`、`totalScore`、`grade`、`summary`、`strengths`、`improvements` |
-| `/api/score/batch` | `POST` | 批量评分对比接口 | `students: StudentRecord[]` | `{ results: StudentScore[] }` |
-| `/api/asr` | `POST` | 语音识别接口 | `multipart/form-data`，字段 `audio` | `{ text, duration }` |
-| `/api/tts` | `POST` | 语音合成接口 | `text` | `{ audioUri, audioSize }` |
+# 🎬 演示
 
-## 快速启动指南
+![产品截图](./public/hero-interview.png)
 
-### 环境要求
+🔗 在线体验：【把作品的外网访问网址贴这里，让人能直接点开玩；没有就删掉这一行】
 
-- Node.js 20+
-- pnpm 9+
+# 🛠 用到的技术 / AI 工具
 
-### 安装依赖
+- Next.js 16 + React 19 + TypeScript
+- Tailwind CSS + shadcn/ui + lucide-react
+- DeepSeek：AI 面试官对话、评分生成、浏览器转写文本润色
+- Web Speech API：浏览器实时语音转写
+- MediaRecorder / Web Audio API：麦克风录音、音量检测、录音回放
+- Chart.js / react-chartjs-2：评分雷达图
+- OpenNext + Cloudflare Workers / Wrangler：部署适配
 
-```bash
-pnpm install
-```
+# 🚀 怎么跑起来
 
-### 启动开发服务器
-
-```bash
-pnpm dev
-```
-
-启动后访问 [http://localhost:5000](http://localhost:5000) 查看应用。
-
-### 常用命令
+环境要求：Node.js 20+、pnpm 9+
 
 ```bash
-pnpm ts-check
-pnpm lint
-pnpm build
-pnpm start
+corepack pnpm install
+corepack pnpm dev
 ```
 
-### Cloudflare 部署命令
-
-```bash
-corepack pnpm cf:build     # 构建 Cloudflare 产物
-corepack pnpm cf:preview   # 本地 Wrangler 预览
-corepack pnpm cf:deploy    # 部署到 Cloudflare
-```
-
-完整部署教程见 [docs/cloudflare-pages-functions-deploy.md](docs/cloudflare-pages-functions-deploy.md)。
-
-## 项目结构
+开发服务默认运行在：
 
 ```text
-docs/
-├── prompts/       # 面试官系统提示词、评分标准等文档
-├── requirements/  # 需求文档
-└── test-cases/    # 测试用例
-
-src/
-├── app/           # Next.js App Router 页面与 API
-├── components/    # React 组件
-└── lib/           # 面试提示词、评分维度和工具函数
-
-open-next.config.ts # OpenNext Cloudflare 适配配置
-wrangler.jsonc      # Cloudflare Workers/Pages Functions 运行配置
+http://localhost:5000
 ```
 
-## 团队分工说明
+如果需要启用 DeepSeek 能力，请在 `.dev.vars` 或部署环境变量中配置：
 
-- A - 产品经理：负责需求拆解、面试流程设计、评分维度定义和验收标准。
-- B - Agent 开发者：负责面试官系统提示词、评分提示词、AI 调用和降级策略。
-- C - 前端：负责页面交互、语音录制、雷达图、报告展示和学生对比体验。
-- D - 测试：负责测试用例、接口联调、异常场景验证和回归检查。
+```bash
+DEEPSEEK_API_KEY=your_deepseek_api_key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+```
+
+常用检查命令：
+
+```bash
+corepack pnpm ts-check
+corepack pnpm lint:build
+corepack pnpm build
+```
+
+# 📌 后续计划
+
+- 接入正式服务端 ASR，将完整录音转写作为浏览器实时转写的补强方案。
+- 增加面试结束后的逐题反馈，标注回答亮点、跑题点和可追问风险。
+- 增加更多学校 / 项目画像，让 AI 面试官风格更贴近不同院校。
+- 支持历史报告云端保存，方便学生、老师和顾问共同复盘。
+- 增加演示视频、公开体验链接和移动端录制稳定性优化。
+
+---
+
+# 📄 版权与许可
+
+本作品版权归 **AiiiiiiiEEEEEEE 团队成员** 共同所有，采用 [MIT License](./LICENSE) 开源，使用请署名。
+
+> 本项目为 AIY 黑客松参赛作品，作品归团队所有；AIY 组委会仅作收录与展示。

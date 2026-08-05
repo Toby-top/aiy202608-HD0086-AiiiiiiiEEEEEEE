@@ -17,6 +17,7 @@ import { TimerDisplay } from '@/components/interview/TimerDisplay';
 import { RecordButton } from '@/components/interview/RecordButton';
 import CameraPreview from '@/components/interview/CameraPreview';
 import { Sidebar } from '@/components/interview/Sidebar';
+import { MobileSidebarDrawer } from '@/components/interview/MobileSidebarDrawer';
 import {
   ArrowLeft,
   Flag,
@@ -83,10 +84,19 @@ interface BrowserSpeechRecognitionConstructor {
   new (): BrowserSpeechRecognition;
 }
 
+interface TranscriptRefineResponse {
+  success: boolean;
+  text?: string;
+}
+
 type SpeechWindow = Window & {
   SpeechRecognition?: BrowserSpeechRecognitionConstructor;
   webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
 };
+
+function getSpeechRecognitionLang(languageMode: 'en' | 'zh') {
+  return languageMode === 'zh' ? 'zh-CN' : 'en-US';
+}
 
 function saveInterviewHistory(item: InterviewHistoryItem) {
   try {
@@ -182,20 +192,53 @@ export default function InterviewPage() {
     }
   }, []);
 
-  const stopBrowserSpeechRecognition = useCallback(() => {
+  const stopBrowserSpeechRecognition = useCallback(async (waitForFinalResult = false) => {
     browserRecognitionActiveRef.current = false;
     const recognition = browserRecognitionRef.current;
     if (!recognition) return;
 
-    recognition.onend = null;
-    recognition.onresult = null;
-    recognition.onerror = null;
-    try {
-      recognition.stop();
-    } catch {
-      recognition.abort();
-    }
     browserRecognitionRef.current = null;
+
+    if (!waitForFinalResult) {
+      recognition.onend = null;
+      recognition.onresult = null;
+      recognition.onerror = null;
+      try {
+        recognition.stop();
+      } catch {
+        recognition.abort();
+      }
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        recognition.onend = null;
+        recognition.onresult = null;
+        recognition.onerror = null;
+        resolve();
+      };
+
+      recognition.onend = finish;
+      recognition.onerror = (event) => {
+        console.warn('Browser speech recognition error:', event.error);
+        finish();
+      };
+
+      window.setTimeout(finish, 700);
+      try {
+        recognition.stop();
+      } catch {
+        try {
+          recognition.abort();
+        } finally {
+          finish();
+        }
+      }
+    });
   }, []);
 
   const startBrowserSpeechRecognition = useCallback(() => {
@@ -210,9 +253,10 @@ export default function InterviewPage() {
       return;
     }
 
-    stopBrowserSpeechRecognition();
+    void stopBrowserSpeechRecognition();
     browserTranscriptRef.current = '';
     browserRecognitionActiveRef.current = true;
+    const recognitionLang = getSpeechRecognitionLang(languageMode);
 
     const startRecognition = () => {
       if (!browserRecognitionActiveRef.current) return;
@@ -220,7 +264,7 @@ export default function InterviewPage() {
       const recognition = new Recognition();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = 'en-US';
+      recognition.lang = recognitionLang;
       recognition.onresult = (event) => {
         const transcript = Array.from(event.results)
           .map((result) => result[0]?.transcript || '')
@@ -249,9 +293,13 @@ export default function InterviewPage() {
     };
 
     startRecognition();
-  }, [stopBrowserSpeechRecognition]);
+  }, [languageMode, stopBrowserSpeechRecognition]);
 
-  useEffect(() => stopBrowserSpeechRecognition, [stopBrowserSpeechRecognition]);
+  useEffect(() => {
+    return () => {
+      void stopBrowserSpeechRecognition();
+    };
+  }, [stopBrowserSpeechRecognition]);
 
   // 设备测试完成后开始面试
   const handleStartInterview = useCallback(
@@ -399,7 +447,7 @@ export default function InterviewPage() {
   // 处理录音结束
   const handleStopRecording = useCallback(async () => {
     if (!selectedType) return;
-    stopBrowserSpeechRecognition();
+    await stopBrowserSpeechRecognition(true);
     const blob = await recorder.stopRecording();
     setWaitingForAnswer(false);
     if (!blob || blob.size === 0) return;
@@ -432,47 +480,34 @@ export default function InterviewPage() {
       annotations: [],
     });
 
-    // 后台调用 ASR 转文字
+    // 使用浏览器实时转写，并交给 DeepSeek 做轻量纠错。
     setIsTyping(true);
     let recognizedText = '';
-    let asrErrorText = '';
-    try {
-      const formData = new FormData();
-      const extension = blob.type.includes('ogg')
-        ? 'ogg'
-        : blob.type.includes('mp4')
-          ? 'm4a'
-          : 'webm';
-      formData.append('audio', blob, `recording.${extension}`);
-
-      const asrResponse = await fetch('/api/asr', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const asrData = (await asrResponse.json()) as import('@/types/interview').ASRResponse;
-
-      const text = asrData.data?.text || asrData.text;
-      if (asrData.success && text?.trim()) {
-        recognizedText = text.trim();
-      } else {
-        const detail = asrData.error || asrData.message || '未检测到有效语音';
-        const debug = asrData.debug?.type
-          ? `，格式：${asrData.debug.type}，大小：${asrData.debug.size ?? 0} bytes`
-          : '';
-        asrErrorText = `${detail}${debug}`;
-      }
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : '语音识别暂不可用';
-      asrErrorText = detail;
-    }
-
     const browserTranscript = browserTranscriptRef.current.trim();
-    if (!recognizedText && browserTranscript) {
+
+    if (browserTranscript) {
       recognizedText = browserTranscript;
+      try {
+        const refineResponse = await fetch('/api/transcript/refine', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: browserTranscript,
+            language: languageMode,
+            interviewType: selectedType,
+          }),
+        });
+        const refineData = (await refineResponse.json()) as TranscriptRefineResponse;
+        if (refineData.success && refineData.text?.trim()) {
+          recognizedText = refineData.text.trim();
+        }
+      } catch (error) {
+        console.info('Transcript refinement skipped:', error);
+      }
     }
+
     if (!recognizedText) {
-      recognizedText = `(${asrErrorText || '未检测到有效语音；如果你用的是 Firefox，请换 Chrome/Safari 或配置服务端 ASR'})`;
+      recognizedText = '(未识别到文字，请重录或切换识别语言后再试)';
     }
 
     setMessages((prev) =>
@@ -601,7 +636,7 @@ export default function InterviewPage() {
     } finally {
       setIsTyping(false);
     }
-  }, [recorder, selectedType, stopBrowserSpeechRecognition, synthesizeSpeech, timer]);
+  }, [languageMode, recorder, selectedType, stopBrowserSpeechRecognition, synthesizeSpeech, timer]);
 
   // 结束面试
   const handleFinish = useCallback(async () => {
@@ -725,23 +760,14 @@ export default function InterviewPage() {
         />
       </div>
 
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <button
-            className="absolute inset-0 bg-black/30"
-            onClick={() => setSidebarOpen(false)}
-            aria-label="关闭侧边栏遮罩"
-          />
-          <div className="absolute inset-y-0 left-0">
-            <Sidebar
-              interviewType={selectedType || ''}
-              messageCount={messages.filter((m) => m.role === 'student').length}
-              duration={timer.seconds}
-              onNewChat={handleNewChat}
-            />
-          </div>
-        </div>
-      )}
+      <MobileSidebarDrawer open={sidebarOpen} onClose={() => setSidebarOpen(false)}>
+        <Sidebar
+          interviewType={selectedType || ''}
+          messageCount={messages.filter((m) => m.role === 'student').length}
+          duration={timer.seconds}
+          onNewChat={handleNewChat}
+        />
+      </MobileSidebarDrawer>
 
       {/* Main Content */}
       <div className="relative flex flex-1 flex-col overflow-hidden">
@@ -1121,8 +1147,13 @@ export default function InterviewPage() {
                       duration={recorder.duration}
                       onStart={async () => {
                         if (!isMuted) {
-                          await recorder.startRecording();
                           startBrowserSpeechRecognition();
+                          try {
+                            await recorder.startRecording();
+                          } catch (error) {
+                            await stopBrowserSpeechRecognition();
+                            throw error;
+                          }
                         }
                       }}
                       onStop={handleStopRecording}
@@ -1170,6 +1201,17 @@ export default function InterviewPage() {
                   >
                     <FileText className="h-5 w-5" />
                     <span className="text-[10px]">纪要</span>
+                  </button>
+                  <button
+                    onClick={() => setLanguageMode((value) => (value === 'en' ? 'zh' : 'en'))}
+                    disabled={recorder.status !== 'idle'}
+                    className={`flex min-w-[62px] flex-col items-center gap-1 rounded-lg px-3 py-2 transition-all hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 ${
+                      languageMode === 'zh' ? 'bg-amber-50 text-amber-700' : 'bg-teal-50 text-teal-700'
+                    }`}
+                    title={`识别语言：${languageMode === 'zh' ? '中文' : 'English'}`}
+                  >
+                    <Globe className="h-5 w-5" />
+                    <span className="text-[10px]">{languageMode === 'zh' ? '中文' : 'English'}</span>
                   </button>
                 </div>
 

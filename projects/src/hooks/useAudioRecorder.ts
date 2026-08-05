@@ -4,6 +4,8 @@ import { useState, useRef, useCallback } from 'react';
 import type { RecordingStatus } from '@/types/interview';
 
 const MIC_GAIN = 3.2;
+const AUDIO_BITS_PER_SECOND = 128_000;
+const RECORDING_TIMESLICE_MS = 1000;
 
 interface UseAudioRecorderReturn {
   /** 当前录音状态 */
@@ -111,9 +113,9 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       }
 
       const mimeTypes = [
-        'audio/ogg;codecs=opus',
         'audio/webm;codecs=opus',
         'audio/webm',
+        'audio/ogg;codecs=opus',
         'audio/mp4',
       ];
       const supportedMimeType = mimeTypes.find((type) =>
@@ -123,7 +125,10 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       // 设置 MediaRecorder
       const mediaRecorder = new MediaRecorder(
         destination.stream,
-        supportedMimeType ? { mimeType: supportedMimeType } : undefined
+        {
+          audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
+          ...(supportedMimeType ? { mimeType: supportedMimeType } : {}),
+        }
       );
       mediaRecorderRef.current = mediaRecorder;
 
@@ -133,7 +138,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         }
       };
 
-      mediaRecorder.start(100);
+      mediaRecorder.start(RECORDING_TIMESLICE_MS);
       setStatus('recording');
 
       // 启动计时器

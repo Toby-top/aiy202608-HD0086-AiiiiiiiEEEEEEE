@@ -108,6 +108,7 @@ export function VoiceMessage({
     if (!audioUrl) return;
 
     if (audioRef.current) {
+      audioRef.current.load();
       audioRef.current.currentTime = 0;
       setIsPlaying(true);
       startTimeRef.current = Date.now();
@@ -300,6 +301,7 @@ export function VoiceMessage({
           <audio
             ref={audioRef}
             src={audioUrl}
+            preload="auto"
             onEnded={() => {
               setIsPlaying(false);
               setProgress(0);
