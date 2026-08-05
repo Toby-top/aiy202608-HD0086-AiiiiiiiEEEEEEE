@@ -36,9 +36,11 @@ function getRuntimeEnvValue(name: string) {
 }
 
 function getDeepSeekConfig() {
+  const baseUrl = getRuntimeEnvValue('DEEPSEEK_BASE_URL') || 'https://api.deepseek.com';
+
   return {
     apiKey: getRuntimeEnvValue('DEEPSEEK_API_KEY'),
-    baseUrl: getRuntimeEnvValue('DEEPSEEK_BASE_URL') || 'https://api.deepseek.com',
+    baseUrl,
     model: getRuntimeEnvValue('DEEPSEEK_MODEL') || 'deepseek-chat',
   };
 }
@@ -59,7 +61,18 @@ export async function createChatCompletion({
     throw new Error('DEEPSEEK_API_KEY is not configured');
   }
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+  if (/^sk-/i.test(baseUrl)) {
+    throw new Error('DEEPSEEK_BASE_URL appears to contain an API key; set it to https://api.deepseek.com');
+  }
+
+  let apiUrl: URL;
+  try {
+    apiUrl = new URL('/chat/completions', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
+  } catch {
+    throw new Error('DEEPSEEK_BASE_URL must be a valid URL, for example https://api.deepseek.com');
+  }
+
+  const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
