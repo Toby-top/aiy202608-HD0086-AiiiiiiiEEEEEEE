@@ -3,7 +3,7 @@
 > 面向准备国际高中与海外升学面试的学生，提供 AI 模拟面试、语音对话、即时追问、六维度评分报告和多学生对比复盘。
 
 🏆 **AIY 黑客松 2026 深圳站** 参赛作品  
-🏷 命题企业 / 赛道：Coze  
+🏷 命题企业 / 赛道：扣子 Coze 赛道
 👤 团队：AiiiiiiiEEEEEEE  
 🔢 团队编号：HD0086
 
@@ -29,7 +29,7 @@
 
 ## 🎬 演示
 
-🔗 在线体验：[interview.tobysneko.com](interview.tobysneko.com)
+🔗 在线体验：[interview.tobysneko.com](interview.tobysneko.com) *（建议使用 Google Chrome）*
 
 项目主应用位于 [`projects/`](./projects) 目录。
 
@@ -60,7 +60,8 @@ https://your-project.your-subdomain.workers.dev
 - Wrangler
 
 ## 🚀 怎么跑起来
-### 建议在线体验：[interview.tobysneko.com](interview.tobysneko.com)
+### 建议在线体验：
+[interview.tobysneko.com](interview.tobysneko.com) *（建议使用 Google Chrome 打开）*
 
 ### 以下是本地部署的方式，*没有配置 API Key 可能会报错*
 环境要求：
