@@ -13,10 +13,10 @@
 
 | 成员 | 负责 |
 | --- | --- |
-| 关复毅 (@Toby-top) | Coze 平台搭建、Agent 配置、技能调用、API 对接 |
-| 黄泽涛 (@@ggg734) | 提示词设计、面试场景定义、测试用例、文档撰写 |
-| 刘㬢羽 (@liuxiyu241) | 用户界面、语音交互、报告展示、前端开发 |
-| 李豪 (@lihao202688) | 功能测试、用户体验、文档撰写、演示准备 |
+| 关复毅 ([@Toby-top](https://github.com/Toby-top)) | Coze 平台搭建、Agent 配置、技能调用、API 对接 |
+| 黄泽涛 ([@ggg734](https://github.com/Toby-top)) | 提示词设计、面试场景定义、测试用例、文档撰写 |
+| 刘㬢羽 ([@liuxiyu241](https://github.com/liuxiyu241)) | 用户界面、语音交互、报告展示、前端开发 |
+| 李豪 ([@lihao202688](https://github.com/lihao202688)) | 功能测试、用户体验、文档撰写、演示准备 |
 
 ## ✨ 它能做什么
 
