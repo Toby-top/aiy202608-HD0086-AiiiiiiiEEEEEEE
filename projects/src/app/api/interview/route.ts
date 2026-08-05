@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server';
-import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
 import { createChatCompletion } from '@/lib/ai-provider';
 import { INTERVIEWER_SYSTEM_PROMPT } from '@/lib/interview-prompt';
 
@@ -99,8 +98,7 @@ function normalizeHistory(history: ClientMessage[] = []): ClientMessage[] {
 }
 
 async function handleJsonInterview(
-  body: { interviewType?: string; message?: string; history?: ClientMessage[] },
-  client: LLMClient
+  body: { interviewType?: string; message?: string; history?: ClientMessage[] }
 ) {
   const history = normalizeHistory(body.history);
   const userMessage = body.message?.trim();
@@ -132,12 +130,6 @@ async function handleJsonInterview(
         messages: allMessages,
         temperature: 0.7,
       });
-    } else {
-      const response = await client.invoke(allMessages, {
-        model: 'doubao-seed-1-8-251228',
-        temperature: 0.8,
-      });
-      replyText = response.content?.toString() || replyText;
     }
   } catch (error) {
     console.error('Interview model error:', error);
@@ -155,7 +147,7 @@ async function handleJsonInterview(
   });
 }
 
-function handleStreamInterview(messages: ClientMessage[], client: LLMClient) {
+function handleStreamInterview(messages: ClientMessage[]) {
   // Build the message array with system prompt
   const systemMessage = {
     role: 'system' as const,
@@ -207,36 +199,15 @@ function handleStreamInterview(messages: ClientMessage[], client: LLMClient) {
       });
     }
 
-    const stream = client.stream(allMessages, {
-      model: 'doubao-seed-1-8-251228',
-      temperature: 0.8,
-      streaming: true,
-    });
-
     const encoder = new TextEncoder();
-    let hasContent = false;
 
     const readableStream = new ReadableStream({
-      async start(controller) {
+      start(controller) {
         try {
-          for await (const chunk of stream) {
-            if (chunk.content) {
-              hasContent = true;
-              const text = chunk.content.toString();
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ content: text })}\n\n`)
-              );
-            }
-          }
-
-          // If no content was received (API error), use fallback
-          if (!hasContent) {
-            const fallback = getFallbackResponse(messages.length);
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ content: fallback })}\n\n`)
-            );
-          }
-
+          const fallback = getFallbackResponse(messages.length);
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ content: fallback })}\n\n`)
+          );
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
         } catch (error) {
@@ -286,14 +257,11 @@ function handleStreamInterview(messages: ClientMessage[], client: LLMClient) {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
-  const config = new Config();
-  const client = new LLMClient(config, customHeaders);
 
   if (body.message) {
-    return handleJsonInterview(body, client);
+    return handleJsonInterview(body);
   }
 
   const messages = Array.isArray(body.messages) ? body.messages : [];
-  return handleStreamInterview(messages, client);
+  return handleStreamInterview(messages);
 }

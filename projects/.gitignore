@@ -1,0 +1,11 @@
+.env
+.env*.local
+.dev.vars
+.next/
+.open-next/
+.wrangler/
+.vercel/
+dist/
+node_modules/
+tsconfig.tsbuildinfo
+*.log

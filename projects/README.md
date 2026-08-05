@@ -9,7 +9,7 @@ AI 国际高中面试辅导系统是一套面向国际高中学生的模拟面�
 - 6 维度评分：逻辑表达、专业深度、抗压能力、沟通亲和力、自我认知、匹配动机。
 - 雷达图报告：用 Chart.js 展示单次面试的多维评分表现。
 - 学生对比：支持选择 2-10 个学生进行批量评分、雷达图对比、表格对比和 CSV/JSON 导出。
-- 语音能力：支持 ASR 语音识别输入与 TTS 面试官语音合成。
+- 语音能力：支持浏览器语音识别兜底与浏览器 TTS 面试官语音播放。
 
 ## 技术栈
 
@@ -18,7 +18,7 @@ AI 国际高中面试辅导系统是一套面向国际高中学生的模拟面�
 - TypeScript
 - Tailwind CSS
 - Chart.js / react-chartjs-2
-- coze-coding-dev-sdk
+- OpenNext for Cloudflare / Wrangler
 
 ## API 接口列表
 
@@ -60,6 +60,16 @@ pnpm build
 pnpm start
 ```
 
+### Cloudflare 部署命令
+
+```bash
+corepack pnpm cf:build     # 构建 Cloudflare 产物
+corepack pnpm cf:preview   # 本地 Wrangler 预览
+corepack pnpm cf:deploy    # 部署到 Cloudflare
+```
+
+完整部署教程见 [docs/cloudflare-pages-functions-deploy.md](docs/cloudflare-pages-functions-deploy.md)。
+
 ## 项目结构
 
 ```text
@@ -72,6 +82,9 @@ src/
 ├── app/           # Next.js App Router 页面与 API
 ├── components/    # React 组件
 └── lib/           # 面试提示词、评分维度和工具函数
+
+open-next.config.ts # OpenNext Cloudflare 适配配置
+wrangler.jsonc      # Cloudflare Workers/Pages Functions 运行配置
 ```
 
 ## 团队分工说明

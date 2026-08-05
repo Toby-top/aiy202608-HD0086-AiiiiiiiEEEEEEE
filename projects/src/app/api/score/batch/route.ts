@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server';
-import { LLMClient, Config } from 'coze-coding-dev-sdk';
 import { createChatCompletion, extractJsonObject } from '@/lib/ai-provider';
 import { SCORING_DIMENSIONS, SCORE_GRADES } from '@/lib/interview-prompt';
 
@@ -195,10 +194,7 @@ function getFallbackScore(messages: { role: string; content: string }[]) {
 /**
  * 对单个学生进行评分
  */
-async function scoreStudent(
-  client: LLMClient | null,
-  student: StudentRecord
-) {
+async function scoreStudent(student: StudentRecord) {
   const conversationText = student.messages
     .map(m => `${m.role === 'user' ? '学生' : '面试官'}: ${m.content}`)
     .join('\n');
@@ -223,19 +219,10 @@ ${conversationText}
         temperature: 0.2,
         responseFormat: 'json_object',
       });
-    } else {
-      if (!client) {
-        throw new Error('Fallback LLM client is not available');
-      }
+    }
 
-      const response = await client.invoke(
-        [
-          { role: 'system', content: SCORING_SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-        { model: 'kimi-k2-5-260127', temperature: 0.3 }
-      );
-      content = response.content?.toString() || '';
+    if (!content) {
+      return getFallbackScore(student.messages);
     }
 
     return normalizeScoreResult(extractJsonObject(content), student.messages);
@@ -263,12 +250,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const client = process.env.DEEPSEEK_API_KEY ? null : new LLMClient(new Config());
-
     // 并行评分所有学生
     const results = await Promise.all(
       students.map(async (student) => {
-        const scoreResult = await scoreStudent(client, student);
+        const scoreResult = await scoreStudent(student);
         return {
           id: student.id,
           name: student.name,

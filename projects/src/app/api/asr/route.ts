@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ASRClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
 
 /**
  * POST /api/asr
- * 用途：语音识别接口，将前端录制的音频转写为文本，作为面试回答输入。
+ * 用途：语音识别接口。Cloudflare 部署中默认接收音频并返回未配置状态，前端会使用浏览器语音识别兜底。
  * 输入：multipart/form-data，字段 audio 为音频 File。
- * 返回：JSON，成功时兼容 { text, duration } 与 { success, data: { text, duration } }。
+ * 返回：JSON，未配置服务端 ASR 时返回 { success: false, text: '' } 和音频调试信息。
  */
 
 export async function POST(request: NextRequest) {
-  const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
-  const config = new Config();
-  const client = new ASRClient(config, customHeaders);
-
   try {
     const formData = await request.formData();
-    const audioFile = formData.get('audio') as File;
+    const audioFile = formData.get('audio') as File | null;
 
     if (!audioFile) {
       return NextResponse.json(
@@ -24,10 +19,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert audio to base64
-    const arrayBuffer = await audioFile.arrayBuffer();
-
-    if (arrayBuffer.byteLength === 0) {
+    if (audioFile.size === 0) {
       return NextResponse.json(
         {
           success: false,
@@ -38,48 +30,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const base64Data = Buffer.from(arrayBuffer).toString('base64');
-
-    if (!config.baseUrl) {
-      return NextResponse.json({
-        success: false,
+    return NextResponse.json({
+      success: false,
+      text: '',
+      duration: 0,
+      data: {
         text: '',
         duration: 0,
-        data: {
-          text: '',
-          duration: 0,
-        },
-        error: 'ASR service is not configured',
-        message: 'ASR service is not configured; browser speech recognition fallback may be used',
-        debug: {
-          type: audioFile.type,
-          size: audioFile.size,
-        },
-      });
-    }
-
-    const result = await client.recognize({
-      uid: `user_${Date.now()}`,
-      base64Data,
-    });
-
-    return NextResponse.json({
-      success: true,
-      text: result.text,
-      duration: result.duration,
-      data: {
-        text: result.text,
-        duration: result.duration,
       },
+      error: 'ASR service is not configured',
+      message: 'ASR service is not configured; browser speech recognition fallback may be used',
       debug: {
         type: audioFile.type,
         size: audioFile.size,
       },
     });
   } catch (error) {
-    console.error('ASR error:', error);
     const message = error instanceof Error ? error.message : String(error);
-    // Return graceful fallback - ASR is optional, user can type instead
     return NextResponse.json({
       success: false,
       text: '',
@@ -89,7 +56,7 @@ export async function POST(request: NextRequest) {
         duration: 0,
       },
       error: message || 'ASR service temporarily unavailable',
-      message: 'ASR service temporarily unavailable, please use text input',
+      message: 'ASR service temporarily unavailable, please use browser speech recognition',
     });
   }
 }

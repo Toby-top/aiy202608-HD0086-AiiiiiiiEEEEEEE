@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server';
-import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
 import { createChatCompletion, extractJsonObject } from '@/lib/ai-provider';
 import { SCORING_DIMENSIONS, SCORE_GRADES } from '@/lib/interview-prompt';
 
@@ -250,21 +249,10 @@ export async function POST(request: NextRequest) {
         temperature: 0.2,
         responseFormat: 'json_object',
       });
-    } else {
-      const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
-      const config = new Config();
-      const client = new LLMClient(config, customHeaders);
-      const response = await client.invoke(
-        [
-          { role: 'system', content: SCORING_SYSTEM_PROMPT },
-          userMessage,
-        ],
-        {
-          model: 'doubao-seed-1-8-251228',
-          temperature: 0.3,
-        },
-      );
-      content = response.content?.toString() || '';
+    }
+
+    if (!content) {
+      return Response.json(getFallbackScore(messages));
     }
 
     const result = extractJsonObject(content);
