@@ -45,6 +45,8 @@ https://your-project.your-subdomain.workers.dev
 
 ## 🛠 用到的技术 / AI 工具
 
+- Coze
+- Codex
 - Next.js 16
 - React 19
 - TypeScript
@@ -62,13 +64,48 @@ https://your-project.your-subdomain.workers.dev
 - Node.js 20+
 - pnpm 9+
 
-安装依赖并启动开发服务：
+下载仓库后，先进入项目目录，再安装依赖并启动开发服务。
+
+### macOS / Linux
 
 ```bash
+cd <仓库文件夹> # 一个你喜欢的地方
+git clone git@github.com:Toby-top/aiy202608-HD0086-AiiiiiiiEEEEEEE.git
 cd projects
 corepack enable
 corepack pnpm install
 corepack pnpm dev
+```
+
+启动后访问：
+
+```text
+http://localhost:5000
+```
+
+### Windows
+
+在 PowerShell 中运行：
+
+```powershell
+cd <仓库文件夹> # Same same~ 也是一个你喜欢的地方
+git clone git@github.com:Toby-top/aiy202608-HD0086-AiiiiiiiEEEEEEE.git
+cd projects
+corepack enable
+corepack pnpm install
+corepack pnpm dev
+```
+
+启动后访问：
+
+```text
+http://localhost:5000
+```
+
+如果 Windows 提示无法执行脚本，可以先运行：
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
 
 常用检查命令：
