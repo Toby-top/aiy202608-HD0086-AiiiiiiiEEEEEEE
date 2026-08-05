@@ -4,10 +4,47 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Camera, Mic, MicOff, CameraOff, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+const MIC_SILENCE_RMS = 0.015;
+const MIC_DISPLAY_GAIN = 8;
+const MIC_ATTACK_SMOOTHING = 0.35;
+const MIC_RELEASE_SMOOTHING = 0.12;
+const MIC_RENDER_DELTA = 0.01;
+
 interface DeviceTestProps {
   onStartInterview: () => void;
   onBack?: () => void;
   interviewTitle: string;
+}
+
+interface WebKitAudioWindow extends Window {
+  webkitAudioContext?: typeof AudioContext;
+}
+
+function getAudioContextConstructor() {
+  return window.AudioContext || (window as WebKitAudioWindow).webkitAudioContext;
+}
+
+function getMediaErrorMessage(err: unknown, deviceName: string) {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return `当前页面无法访问${deviceName}，请使用 Chrome 打开 HTTPS 或 localhost 地址`;
+  }
+
+  if (err instanceof DOMException) {
+    if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+      return `Chrome 未允许访问${deviceName}，请在地址栏左侧权限中允许后重试`;
+    }
+    if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+      return `未检测到可用${deviceName}，请检查设备连接或系统输入设置`;
+    }
+    if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+      return `${deviceName}正被其他应用占用，请关闭会议、录音或浏览器标签页后重试`;
+    }
+    if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
+      return `选中的${deviceName}不可用，请切换设备后重试`;
+    }
+  }
+
+  return `无法访问${deviceName}，请检查 Chrome 和系统权限设置`;
 }
 
 export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceTestProps) {
@@ -15,6 +52,8 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number>(0);
+  const micVolumeRef = useRef(0);
+  const displayedMicVolumeRef = useRef(0);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
   const hasAutoRequestedRef = useRef(false);
@@ -71,8 +110,8 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
-    } catch {
-      setError('无法访问摄像头，请检查权限设置');
+    } catch (err) {
+      setError(getMediaErrorMessage(err, '摄像头'));
       setCameraEnabled(false);
     } finally {
       setCameraLoading(false);
@@ -123,32 +162,61 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
       setMicEnabled(true);
 
       // 创建音频分析器
-      const audioContext = new AudioContext();
+      const AudioContextConstructor = getAudioContextConstructor();
+      if (!AudioContextConstructor) {
+        throw new Error('AudioContext is not supported');
+      }
+      const audioContext = new AudioContextConstructor();
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume().catch(() => undefined);
+      }
       const analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(stream);
       source.connect(analyser);
-      analyser.fftSize = 256;
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.85;
 
       audioContextRef.current = audioContext;
       analyserRef.current = analyser;
+      micVolumeRef.current = 0;
+      displayedMicVolumeRef.current = 0;
+      setMicVolume(0);
 
       // 开始检测音量
+      const dataArray = new Uint8Array(analyser.fftSize);
       const updateVolume = () => {
         if (analyserRef.current) {
-          const dataArray = new Uint8Array(analyserRef.current.fftSize);
           analyserRef.current.getByteTimeDomainData(dataArray);
           const sumSquares = dataArray.reduce((sum, value) => {
             const centered = (value - 128) / 128;
             return sum + centered * centered;
           }, 0);
           const rms = Math.sqrt(sumSquares / dataArray.length);
-          setMicVolume(Math.min(1, rms * 5));
+          const nextVolume =
+            rms <= MIC_SILENCE_RMS
+              ? 0
+              : Math.min(1, (rms - MIC_SILENCE_RMS) * MIC_DISPLAY_GAIN);
+          const smoothing =
+            nextVolume > micVolumeRef.current ? MIC_ATTACK_SMOOTHING : MIC_RELEASE_SMOOTHING;
+          const smoothedVolume =
+            micVolumeRef.current + (nextVolume - micVolumeRef.current) * smoothing;
+          const stableVolume = smoothedVolume < 0.01 ? 0 : smoothedVolume;
+
+          micVolumeRef.current = stableVolume;
+
+          if (Math.abs(stableVolume - displayedMicVolumeRef.current) >= MIC_RENDER_DELTA) {
+            displayedMicVolumeRef.current = stableVolume;
+            setMicVolume(stableVolume);
+          } else if (stableVolume === 0 && displayedMicVolumeRef.current !== 0) {
+            displayedMicVolumeRef.current = 0;
+            setMicVolume(0);
+          }
         }
         animationFrameRef.current = requestAnimationFrame(updateVolume);
       };
       updateVolume();
-    } catch {
-      setError('无法访问麦克风，请检查权限设置');
+    } catch (err) {
+      setError(getMediaErrorMessage(err, '麦克风'));
       setMicEnabled(false);
     } finally {
       setMicLoading(false);
@@ -163,6 +231,8 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
     }
     closeAudioContext();
     cancelAnimationFrame(animationFrameRef.current);
+    micVolumeRef.current = 0;
+    displayedMicVolumeRef.current = 0;
     setMicEnabled(false);
     setMicVolume(0);
   }, [audioStream, closeAudioContext]);
@@ -194,6 +264,8 @@ export function DeviceTest({ onStartInterview, onBack, interviewTitle }: DeviceT
         }
         closeAudioContext();
         cancelAnimationFrame(animationFrameRef.current);
+        micVolumeRef.current = 0;
+        displayedMicVolumeRef.current = 0;
         setMicEnabled(false);
         setMicVolume(0);
         setTimeout(() => enableMic(), 100);
