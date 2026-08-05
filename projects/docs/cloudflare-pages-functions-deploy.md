@@ -82,7 +82,7 @@ corepack pnpm wrangler login
 
 ## 5. 配置生产环境变量
 
-部署后的 API 会从 Cloudflare runtime 环境读取变量，也就是代码里的 `process.env.DEEPSEEK_API_KEY`。如果你已经在 Cloudflare Dashboard 里配置了 key，不需要把 key 写进仓库，也不需要写进 `wrangler.jsonc`。
+部署后的 API 会从 Cloudflare runtime 环境读取变量。代码会优先读取 `process.env.DEEPSEEK_API_KEY`，并兜底读取 OpenNext Cloudflare context 里的 env bindings。如果你已经在 Cloudflare Dashboard 里配置了 key，不需要把 key 写进仓库，也不需要写进 `wrangler.jsonc`。
 
 方式 A：用 Wrangler 命令写入 secret。
 

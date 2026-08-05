@@ -1,3 +1,5 @@
+import { getCloudflareContext } from '@opennextjs/cloudflare';
+
 export type ChatRole = 'system' | 'user' | 'assistant';
 
 export interface ChatMessage {
@@ -19,11 +21,25 @@ interface DeepSeekChatCompletion {
   }>;
 }
 
+type RuntimeEnv = CloudflareEnv & Record<string, string | undefined>;
+
+function getRuntimeEnvValue(name: string) {
+  const processValue = process.env[name]?.trim();
+  if (processValue) return processValue;
+
+  try {
+    const cloudflareEnv = getCloudflareContext().env as RuntimeEnv;
+    return cloudflareEnv[name]?.trim();
+  } catch {
+    return undefined;
+  }
+}
+
 function getDeepSeekConfig() {
   return {
-    apiKey: process.env.DEEPSEEK_API_KEY?.trim(),
-    baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
-    model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+    apiKey: getRuntimeEnvValue('DEEPSEEK_API_KEY'),
+    baseUrl: getRuntimeEnvValue('DEEPSEEK_BASE_URL') || 'https://api.deepseek.com',
+    model: getRuntimeEnvValue('DEEPSEEK_MODEL') || 'deepseek-chat',
   };
 }
 
