@@ -49,6 +49,7 @@ https://your-project.your-subdomain.workers.dev
 
 - Coze
 - Codex
+- WorkBuddy
 - Next.js 16
 - React 19
 - TypeScript
@@ -138,6 +139,7 @@ corepack pnpm cf:preview
 - 增加老师端班级管理和学生历史报告归档。
 - 扩充国际高中与海外升学面试题库，按学校、项目和难度分类。
 - 优化评分解释，让学生获得更具体的表达改进建议。
+- 提升用户体验，例如自动开始与结束语音识别，向大厂产品体验靠拢，（例如 ChatGPT, Gemini, 豆包...）
 
 ---
 
