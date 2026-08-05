@@ -60,7 +60,9 @@ https://your-project.your-subdomain.workers.dev
 - Wrangler
 
 ## 🚀 怎么跑起来
+### 建议在线体验：[interview.tobysneko.com](interview.tobysneko.com)
 
+### 以下是本地部署的方式，*没有配置 API Key 可能会报错*
 环境要求：
 
 - Node.js 20+
@@ -68,7 +70,7 @@ https://your-project.your-subdomain.workers.dev
 
 下载仓库后，先进入项目目录，再安装依赖并启动开发服务。
 
-### macOS / Linux
+#### macOS / Linux
 
 ```bash
 cd <仓库文件夹> # 一个你喜欢的地方，用于放下载下来的文件
@@ -85,7 +87,7 @@ corepack pnpm dev
 http://localhost:5000
 ```
 
-### Windows
+#### Windows
 
 在 PowerShell 中运行：
 
