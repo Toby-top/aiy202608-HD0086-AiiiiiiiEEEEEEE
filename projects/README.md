@@ -65,6 +65,8 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 ```
 
+部署到 Cloudflare 后，API 会读取 Cloudflare Dashboard 中配置的 Variables and Secrets。项目的 `cf:deploy` 脚本已带 `--keep-vars`，用于保留线上配置的 `DEEPSEEK_API_KEY`。
+
 常用检查命令：
 
 ```bash

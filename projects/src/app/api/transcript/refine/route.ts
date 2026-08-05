@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createChatCompletion, extractJsonObject } from '@/lib/ai-provider';
+import { createChatCompletion, extractJsonObject, isDeepSeekConfigured } from '@/lib/ai-provider';
 
 interface RefineTranscriptBody {
   text?: string;
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!process.env.DEEPSEEK_API_KEY) {
+  if (!isDeepSeekConfigured()) {
     return NextResponse.json({
       success: true,
       text: rawText,

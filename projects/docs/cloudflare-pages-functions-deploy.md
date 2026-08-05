@@ -82,6 +82,8 @@ corepack pnpm wrangler login
 
 ## 5. 配置生产环境变量
 
+部署后的 API 会从 Cloudflare runtime 环境读取变量，也就是代码里的 `process.env.DEEPSEEK_API_KEY`。如果你已经在 Cloudflare Dashboard 里配置了 key，不需要把 key 写进仓库，也不需要写进 `wrangler.jsonc`。
+
 方式 A：用 Wrangler 命令写入 secret。
 
 ```bash
@@ -120,6 +122,8 @@ DEEPSEEK_MODEL=deepseek-chat
 ```bash
 corepack pnpm cf:deploy
 ```
+
+项目里的 `cf:deploy` 已经带上 `-- --keep-vars`，用于保留 Cloudflare Dashboard 中配置的 Variables and Secrets。不要去掉这个参数，否则部署时可能覆盖线上环境变量，导致 DeepSeek 实时回复读不到 key。
 
 等命令完成后，终端会显示部署 URL。
 

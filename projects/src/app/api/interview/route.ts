@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     if (body.message) {
-      return handleJsonInterview(body);
+      return await handleJsonInterview(body);
     }
 
     const messages = Array.isArray(body.messages) ? body.messages : [];

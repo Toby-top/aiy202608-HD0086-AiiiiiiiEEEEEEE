@@ -89,10 +89,29 @@ interface TranscriptRefineResponse {
   text?: string;
 }
 
+interface ApiErrorResponse {
+  success?: boolean;
+  error?: string;
+  message?: string;
+}
+
 type SpeechWindow = Window & {
   SpeechRecognition?: BrowserSpeechRecognitionConstructor;
   webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
 };
+
+async function parseJsonResponse<T extends ApiErrorResponse>(response: Response): Promise<T> {
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new Error(response.ok ? '服务器返回为空' : `服务器请求失败：${response.status}`);
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`服务器返回了不可解析的内容：${text.slice(0, 120)}`);
+  }
+}
 
 function getSpeechRecognitionLang(languageMode: 'en' | 'zh') {
   return languageMode === 'zh' ? 'zh-CN' : 'en-US';
@@ -497,7 +516,7 @@ export default function InterviewPage() {
             interviewType: selectedType,
           }),
         });
-        const refineData = (await refineResponse.json()) as TranscriptRefineResponse;
+        const refineData = await parseJsonResponse<TranscriptRefineResponse>(refineResponse);
         if (refineData.success && refineData.text?.trim()) {
           recognizedText = refineData.text.trim();
         }
@@ -540,7 +559,16 @@ export default function InterviewPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await parseJsonResponse<{
+        success: boolean;
+        data?: {
+          messageId: string;
+          reply?: string;
+          uiCmd?: import('@/types/interview').UICmdData;
+        };
+        error?: string;
+        message?: string;
+      }>(response);
 
       if (!response.ok || !data.success) {
         throw new Error(data.message || data.error || 'DeepSeek 实时回复失败');
@@ -550,6 +578,9 @@ export default function InterviewPage() {
         // 解析 UI_CMD 数据
         const uiCmd = data.data.uiCmd;
         const replyText = uiCmd ? uiCmd.chat_bubble : data.data.reply;
+        if (!replyText?.trim()) {
+          throw new Error('DeepSeek 返回了空回复');
+        }
         if (uiCmd) {
           setHostName(uiCmd.speaker_name || 'AI 面试官');
           setCurrentStage(uiCmd.current_stage || 'ice_breaking');
