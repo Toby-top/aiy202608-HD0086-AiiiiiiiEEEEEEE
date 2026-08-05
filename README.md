@@ -69,7 +69,7 @@ https://your-project.your-subdomain.workers.dev
 ### macOS / Linux
 
 ```bash
-cd <仓库文件夹> # 一个你喜欢的地方
+cd <仓库文件夹> # 一个你喜欢的地方，用于放下载下来的文件
 git clone git@github.com:Toby-top/aiy202608-HD0086-AiiiiiiiEEEEEEE.git
 cd projects
 corepack enable
@@ -88,7 +88,7 @@ http://localhost:5000
 在 PowerShell 中运行：
 
 ```powershell
-cd <仓库文件夹> # Same same~ 也是一个你喜欢的地方
+cd <仓库文件夹> # Same same~ 也是一个你喜欢的地方，用来放下载下来的仓库文件
 git clone git@github.com:Toby-top/aiy202608-HD0086-AiiiiiiiEEEEEEE.git
 cd projects
 corepack enable
