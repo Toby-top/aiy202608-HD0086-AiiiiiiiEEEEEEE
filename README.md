@@ -29,7 +29,7 @@
 
 ## 🎬 演示
 
-🔗 在线体验：[interview.tobysneko.com](interview.tobysneko.com)
+🔗 在线体验：[interview.tobysneko.com](interview.tobysneko.com) *（建议使用 Google Chrome）*
 
 项目主应用位于 [`projects/`](./projects) 目录。
 
@@ -60,7 +60,8 @@ https://your-project.your-subdomain.workers.dev
 - Wrangler
 
 ## 🚀 怎么跑起来
-### 建议在线体验：[interview.tobysneko.com](interview.tobysneko.com)
+### 建议在线体验：
+[interview.tobysneko.com](interview.tobysneko.com) *（建议使用 Google Chrome 打开）*
 
 ### 以下是本地部署的方式，*没有配置 API Key 可能会报错*
 环境要求：
