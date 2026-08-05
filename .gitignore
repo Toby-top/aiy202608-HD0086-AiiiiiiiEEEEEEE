@@ -14,6 +14,10 @@ __pycache__/
 .env
 .env.local
 .env*.local
+.dev.vars
+**/.dev.vars
+.dev.vars.local
+**/.dev.vars.local
 .cozeproj/reduction
 
 # JS/TS bundlers & build outputs
