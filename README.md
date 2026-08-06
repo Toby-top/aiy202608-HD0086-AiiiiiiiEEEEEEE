@@ -29,6 +29,8 @@
 
 ## 🎬 演示
 
+🔗 演示视频：[https://youtu.be/0xFiLdKVS50](https://youtu.be/0xFiLdKVS50)
+
 🔗 在线体验：[interview.tobysneko.com](interview.tobysneko.com) *（建议使用 Google Chrome）*
 
 项目主应用位于 [`projects/`](./projects) 目录。
